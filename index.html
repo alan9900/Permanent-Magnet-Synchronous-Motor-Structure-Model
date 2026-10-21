@@ -1,0 +1,4490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#070b0f" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%230b1319' stroke='%2364dcff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%2364dcff'/%3E%3Cpath d='M16 3v8M16 21v8M3 16h8M21 16h8' stroke='%2364dcff' stroke-width='2'/%3E%3C/svg%3E" />
+<title>永磁同步电机 · 交互式 3D 拆解演示</title>
+<style>
+/* ============================================================
+   01 · 设计令牌与基础版式
+   ============================================================ */
+:root{
+  --bg-0:#060a0e;
+  --bg-1:#0b1319;
+  --bg-2:#101c24;
+  --glass:rgba(11,18,24,.66);
+  --glass-strong:rgba(8,14,19,.88);
+  --line:rgba(178,214,230,.12);
+  --line-strong:rgba(178,214,230,.22);
+  --ink:#edf5f8;
+  --ink-soft:#c4d2da;
+  --muted:#8497a4;
+  --muted-2:#5f7380;
+  --accent:#64dcff;
+  --accent-rgb:100,220,255;
+  --amber:#f2b45c;
+  --red:#ff6574;
+  --green:#69e0ad;
+  --ui-radius:16px;
+  --font-sans:"Segoe UI Variable Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
+  --font-mono:"SFMono-Regular","Cascadia Code","JetBrains Mono","Consolas",monospace;
+  --ease:cubic-bezier(.22,.8,.24,1);
+}
+*{box-sizing:border-box}
+html,body{width:100%;height:100%;margin:0}
+body{
+  overflow:hidden;
+  background:
+    radial-gradient(ellipse 70% 66% at 50% 38%, rgba(27,58,68,.82) 0%, rgba(11,24,31,.72) 37%, rgba(5,9,13,0) 74%),
+    radial-gradient(ellipse 50% 45% at 82% 72%, rgba(22,46,59,.34) 0%, transparent 70%),
+    linear-gradient(145deg,#0b151c 0%, #070b10 48%, #05080b 100%);
+  color:var(--ink);
+  font-family:var(--font-sans);
+  font-size:13px;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;
+}
+button,input{font:inherit}
+button{color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible,input:focus-visible{
+  outline:1px solid var(--accent);
+  outline-offset:3px;
+}
+h1,h2,h3,p,dl,dd{margin:0}
+ul{margin:0;padding:0;list-style:none}
+[hidden]{display:none !important}
+::selection{background:rgba(var(--accent-rgb),.25);color:#fff}
+
+/* 背景网格、暗角与光晕 */
+.app{
+  position:fixed;
+  inset:0;
+  isolation:isolate;
+}
+.app::before{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  background-image:
+    linear-gradient(rgba(126,189,211,.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(126,189,211,.035) 1px, transparent 1px);
+  background-size:64px 64px;
+  -webkit-mask-image:radial-gradient(ellipse 62% 64% at 50% 48%,#000 0%,rgba(0,0,0,.72) 43%,transparent 82%);
+  mask-image:radial-gradient(ellipse 62% 64% at 50% 48%,#000 0%,rgba(0,0,0,.72) 43%,transparent 82%);
+  pointer-events:none;
+  z-index:0;
+}
+.app::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(ellipse at center, transparent 46%, rgba(2,5,8,.42) 100%),
+    linear-gradient(to bottom, rgba(5,9,12,.18), transparent 20%, transparent 77%, rgba(3,6,9,.45));
+  pointer-events:none;
+  z-index:2;
+}
+.scene-host{
+  position:absolute;
+  inset:0;
+  z-index:1;
+  touch-action:none;
+}
+.scene-host canvas{
+  display:block;
+  width:100%;
+  height:100%;
+  outline:none;
+  touch-action:none;
+}
+.label-layer{
+  position:absolute;
+  inset:0;
+  z-index:3;
+  overflow:hidden;
+  pointer-events:none;
+}
+
+/* ============================================================
+   02 · 玻璃面板通用组件
+   ============================================================ */
+.panel{
+  position:relative;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,.035), transparent 25%),
+    var(--glass);
+  border:1px solid var(--line);
+  border-radius:var(--ui-radius);
+  box-shadow:
+    0 20px 60px rgba(0,0,0,.28),
+    inset 0 1px 0 rgba(255,255,255,.045);
+  -webkit-backdrop-filter:blur(20px) saturate(115%);
+  backdrop-filter:blur(20px) saturate(115%);
+}
+.panel::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius:inherit;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.018);
+}
+.kicker{
+  font-family:var(--font-mono);
+  font-size:9px;
+  line-height:1.4;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+  color:var(--muted-2);
+}
+.micro-label{
+  font-family:var(--font-mono);
+  font-size:9px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--muted-2);
+}
+kbd{
+  display:inline-grid;
+  min-width:18px;
+  height:18px;
+  padding:0 5px;
+  place-items:center;
+  border:1px solid rgba(180,213,228,.17);
+  border-bottom-color:rgba(180,213,228,.08);
+  border-radius:5px;
+  background:rgba(255,255,255,.035);
+  color:var(--ink-soft);
+  font-family:var(--font-mono);
+  font-size:9px;
+  font-weight:500;
+  line-height:1;
+}
+.icon{
+  width:14px;
+  height:14px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.5;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+/* ============================================================
+   03 · 左侧品牌、视角与部件列表
+   ============================================================ */
+.left-rail{
+  position:fixed;
+  top:24px;
+  left:24px;
+  z-index:10;
+  width:294px;
+  max-height:calc(100vh - 48px);
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  pointer-events:none;
+}
+.left-rail > *{pointer-events:auto}
+.masthead{
+  position:relative;
+  padding:2px 4px 7px;
+  pointer-events:none;
+}
+.brand-line{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-bottom:12px;
+  color:var(--accent);
+  font-family:var(--font-mono);
+  font-size:9px;
+  font-weight:500;
+  letter-spacing:.2em;
+  text-transform:uppercase;
+}
+.brand-mark{
+  position:relative;
+  width:19px;
+  height:19px;
+  flex:0 0 auto;
+  border:1px solid rgba(var(--accent-rgb),.5);
+  border-radius:50%;
+}
+.brand-mark::before{
+  content:"";
+  position:absolute;
+  inset:4px;
+  border:1px dashed rgba(var(--accent-rgb),.9);
+  border-radius:50%;
+  animation:brand-spin 9s linear infinite;
+}
+.brand-mark::after{
+  content:"";
+  position:absolute;
+  width:4px;
+  height:4px;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 12px rgba(var(--accent-rgb),.8);
+}
+@keyframes brand-spin{to{transform:rotate(360deg)}}
+.masthead h1{
+  font-size:clamp(24px,2.05vw,31px);
+  line-height:1.12;
+  font-weight:620;
+  letter-spacing:-.035em;
+  color:#f4fafc;
+  text-shadow:0 2px 24px rgba(0,0,0,.3);
+}
+.masthead h1 .title-soft{
+  display:block;
+  margin-top:4px;
+  font-size:.58em;
+  font-weight:430;
+  letter-spacing:.09em;
+  color:#9eb1bd;
+}
+.masthead .subline{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  margin-top:12px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.6;
+  letter-spacing:.01em;
+}
+.subline .spec-dot{
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:rgba(var(--accent-rgb),.7);
+  box-shadow:0 0 8px rgba(var(--accent-rgb),.65);
+}
+.view-bar{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:3px;
+  padding:4px;
+  border-radius:12px;
+}
+.view-btn{
+  position:relative;
+  height:31px;
+  border-radius:8px;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:500;
+  letter-spacing:.03em;
+  transition:color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease);
+  white-space:nowrap;
+}
+.view-btn:hover{color:var(--ink-soft);background:rgba(255,255,255,.035)}
+.view-btn.is-active{
+  color:#effcff;
+  background:rgba(var(--accent-rgb),.115);
+  box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18);
+}
+.view-btn.is-active::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  bottom:4px;
+  width:11px;
+  height:1px;
+  transform:translateX(-50%);
+  background:var(--accent);
+  box-shadow:0 0 7px rgba(var(--accent-rgb),.7);
+}
+.mobile-tools{display:none}
+.mobile-panel-close{display:none}
+.parts-panel{
+  min-height:162px;
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.panel-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex:0 0 auto;
+  min-height:49px;
+  padding:12px 14px 10px 16px;
+  border-bottom:1px solid rgba(178,214,230,.075);
+}
+.panel-heading .heading-copy{
+  display:flex;
+  align-items:center;
+  gap:9px;
+}
+.heading-copy h2{
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.05em;
+  color:var(--ink-soft);
+}
+.heading-copy .kicker{font-size:8px;color:var(--muted-2)}
+.count-badge{
+  display:grid;
+  min-width:22px;
+  height:19px;
+  padding:0 6px;
+  place-items:center;
+  border:1px solid rgba(178,214,230,.11);
+  border-radius:6px;
+  background:rgba(255,255,255,.025);
+  color:var(--muted);
+  font-family:var(--font-mono);
+  font-size:9px;
+}
+.part-list{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:7px 7px 6px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(151,187,204,.18) transparent;
+}
+.part-list::-webkit-scrollbar{width:4px}
+.part-list::-webkit-scrollbar-track{background:transparent}
+.part-list::-webkit-scrollbar-thumb{background:rgba(151,187,204,.18);border-radius:8px}
+.part-list::-webkit-scrollbar-thumb:hover{background:rgba(151,187,204,.3)}
+.part-item{
+  --part-color:#8ba0ae;
+  position:relative;
+  display:grid;
+  grid-template-columns:15px 1fr auto;
+  align-items:center;
+  gap:9px;
+  min-height:34px;
+  padding:5px 9px 5px 8px;
+  border:1px solid transparent;
+  border-radius:8px;
+  cursor:pointer;
+  transition:background .2s var(--ease),border-color .2s var(--ease),opacity .2s var(--ease);
+}
+.part-item + .part-item{margin-top:1px}
+.part-item:hover{background:rgba(255,255,255,.032)}
+.part-item.is-selected{
+  background:linear-gradient(90deg,rgba(var(--accent-rgb),.105),rgba(var(--accent-rgb),.015));
+  border-color:rgba(var(--accent-rgb),.14);
+}
+.part-item.is-selected::before{
+  content:"";
+  position:absolute;
+  left:0;
+  top:9px;
+  bottom:9px;
+  width:2px;
+  border-radius:2px;
+  background:var(--accent);
+  box-shadow:0 0 9px rgba(var(--accent-rgb),.5);
+}
+.part-item.is-hidden{opacity:.42}
+.part-check{
+  appearance:none;
+  -webkit-appearance:none;
+  position:relative;
+  width:14px;
+  height:14px;
+  margin:0;
+  border:1px solid rgba(181,213,227,.24);
+  border-radius:4px;
+  background:rgba(3,8,12,.36);
+  cursor:pointer;
+  transition:border-color .2s var(--ease),background .2s var(--ease);
+}
+.part-check:hover{border-color:rgba(181,213,227,.46)}
+.part-check:checked{
+  border-color:rgba(var(--accent-rgb),.55);
+  background:rgba(var(--accent-rgb),.12);
+}
+.part-check:checked::after{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:1.5px;
+  width:3.5px;
+  height:7px;
+  border-right:1.3px solid var(--accent);
+  border-bottom:1.3px solid var(--accent);
+  transform:rotate(42deg);
+}
+.part-name{
+  display:flex;
+  align-items:baseline;
+  gap:7px;
+  min-width:0;
+  color:#c8d6de;
+  font-size:11px;
+  line-height:1.3;
+  letter-spacing:.015em;
+  white-space:nowrap;
+}
+.part-name .en{
+  overflow:hidden;
+  color:#617480;
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.015em;
+  text-overflow:ellipsis;
+}
+.part-item.is-selected .part-name{color:#f2fbff}
+.part-item.is-selected .part-name .en{color:#7e9aa8}
+.part-mark{
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:var(--part-color);
+  box-shadow:0 0 7px color-mix(in srgb,var(--part-color) 55%,transparent);
+  opacity:.82;
+}
+.phase-legend{
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:11px;
+  min-height:29px;
+  padding:5px 13px 4px;
+  border-top:1px solid rgba(178,214,230,.06);
+  color:#8ea3ae;
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.05em;
+}
+.phase-legend-title{
+  color:#536671;
+  font-size:7px;
+  letter-spacing:.11em;
+}
+.phase-legend > span:not(.phase-legend-title):not(.phase-legend-note){
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+}
+.phase-legend i{
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:var(--dot);
+  box-shadow:0 0 6px color-mix(in srgb,var(--dot) 55%,transparent);
+}
+.phase-legend-note{
+  margin-left:auto;
+  color:#526671;
+  font-family:var(--font-sans);
+  font-size:8px;
+  letter-spacing:.02em;
+}
+.panel-footer{
+  flex:0 0 auto;
+  display:flex;
+  gap:6px;
+  padding:9px 10px 11px;
+  border-top:1px solid rgba(178,214,230,.075);
+}
+.soft-btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  height:29px;
+  padding:0 10px;
+  border:1px solid rgba(178,214,230,.11);
+  border-radius:7px;
+  background:rgba(255,255,255,.022);
+  color:var(--muted);
+  font-size:9.5px;
+  letter-spacing:.02em;
+  transition:all .22s var(--ease);
+}
+.soft-btn:hover{
+  border-color:rgba(178,214,230,.21);
+  background:rgba(255,255,255,.045);
+  color:var(--ink-soft);
+}
+.soft-btn.is-active{
+  border-color:rgba(var(--accent-rgb),.28);
+  background:rgba(var(--accent-rgb),.09);
+  color:var(--accent);
+}
+.soft-btn:first-child{flex:1}
+.state-dot{
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:currentColor;
+  opacity:.45;
+  transition:opacity .2s var(--ease),box-shadow .2s var(--ease);
+}
+.soft-btn.is-active .state-dot,
+.tool-btn.is-active .state-dot{
+  opacity:1;
+  box-shadow:0 0 8px currentColor;
+}
+
+/* ============================================================
+   04 · 右侧部件档案与旋转演示
+   ============================================================ */
+.info-panel{
+  position:fixed;
+  top:24px;
+  right:24px;
+  z-index:10;
+  width:326px;
+  max-height:calc(100vh - 300px);
+  min-height:298px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  pointer-events:auto;
+}
+.info-panel-head{
+  flex:0 0 auto;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  min-height:48px;
+  padding:12px 16px 10px;
+  border-bottom:1px solid rgba(178,214,230,.075);
+}
+.info-panel-head h2{
+  margin-top:2px;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.05em;
+  color:var(--ink-soft);
+}
+.file-index{
+  margin-top:2px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.11em;
+}
+.info-empty{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  flex:1 1 auto;
+  min-height:154px;
+  padding:19px 28px 23px;
+  text-align:center;
+}
+.empty-orbit{
+  position:relative;
+  width:46px;
+  height:46px;
+  margin-bottom:15px;
+  border:1px dashed rgba(var(--accent-rgb),.24);
+  border-radius:50%;
+  animation:empty-turn 16s linear infinite;
+}
+.empty-orbit::before{
+  content:"";
+  position:absolute;
+  inset:9px;
+  border:1px solid rgba(178,214,230,.17);
+  border-radius:50%;
+}
+.empty-orbit::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 10px rgba(var(--accent-rgb),.7);
+  transform:translate(-50%,-50%);
+}
+.empty-orbit span{
+  position:absolute;
+  top:4px;
+  left:50%;
+  width:5px;
+  height:5px;
+  border-radius:50%;
+  background:rgba(var(--accent-rgb),.85);
+  transform:translateX(-50%);
+}
+.empty-orbit i{
+  position:absolute;
+  right:3px;
+  bottom:9px;
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:var(--muted);
+}
+@keyframes empty-turn{to{transform:rotate(360deg)}}
+.info-empty strong{
+  margin-bottom:7px;
+  color:var(--ink-soft);
+  font-size:12px;
+  font-weight:530;
+  letter-spacing:.02em;
+}
+.info-empty p{
+  max-width:215px;
+  color:var(--muted-2);
+  font-size:10px;
+  line-height:1.75;
+  letter-spacing:.01em;
+}
+.info-body{
+  --part-color:var(--accent);
+  position:relative;
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  padding:17px 17px 15px 19px;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(151,187,204,.18) transparent;
+}
+.info-body::-webkit-scrollbar{width:4px}
+.info-body::-webkit-scrollbar-track{background:transparent}
+.info-body::-webkit-scrollbar-thumb{background:rgba(151,187,204,.18);border-radius:8px}
+.info-body::-webkit-scrollbar-thumb:hover{background:rgba(151,187,204,.3)}
+.info-body[hidden],.part-info[hidden]{display:none}
+.info-accent{
+  position:absolute;
+  top:20px;
+  left:0;
+  width:2px;
+  height:43px;
+  border-radius:2px;
+  background:var(--part-color);
+  box-shadow:0 0 15px color-mix(in srgb,var(--part-color) 55%,transparent);
+}
+.info-title-row{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+}
+.info-number{
+  flex:0 0 auto;
+  padding-top:3px;
+  color:var(--part-color);
+  font-family:var(--font-mono);
+  font-size:9px;
+  letter-spacing:.06em;
+}
+.info-title-row h2{
+  color:#f3fbff;
+  font-size:19px;
+  line-height:1.22;
+  font-weight:580;
+  letter-spacing:-.025em;
+}
+.info-en{
+  margin-top:2px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:9px;
+  letter-spacing:.07em;
+}
+.info-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin-top:13px;
+}
+.info-meta span{
+  padding:4px 7px;
+  border:1px solid rgba(178,214,230,.1);
+  border-radius:5px;
+  background:rgba(255,255,255,.022);
+  color:#93a9b5;
+  font-family:var(--font-mono);
+  font-size:8px;
+  line-height:1.2;
+  letter-spacing:.02em;
+}
+.info-description{
+  margin-top:15px;
+  color:#a7bac4;
+  font-size:11px;
+  line-height:1.85;
+  letter-spacing:.015em;
+  text-align:justify;
+}
+.info-detail{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:1px;
+  margin-top:14px;
+  overflow:hidden;
+  border:1px solid rgba(178,214,230,.075);
+  border-radius:8px;
+  background:rgba(178,214,230,.06);
+}
+.info-detail div{
+  min-width:0;
+  padding:8px 9px;
+  background:rgba(6,12,17,.56);
+}
+.info-detail dt{
+  margin-bottom:3px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.05em;
+}
+.info-detail dd{
+  overflow:hidden;
+  color:#b8cad3;
+  font-size:9.5px;
+  line-height:1.4;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+}
+.drive-block{
+  flex:0 0 auto;
+  position:relative;
+  padding:13px 16px 14px;
+  border-top:1px solid rgba(178,214,230,.085);
+  background:
+    radial-gradient(ellipse 80% 100% at 10% 100%,rgba(242,180,92,.05),transparent 65%),
+    rgba(5,10,14,.28);
+}
+.drive-heading{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.drive-heading h3{
+  margin-top:2px;
+  color:#cad9e0;
+  font-size:12px;
+  font-weight:540;
+  letter-spacing:.02em;
+}
+.run-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:26px;
+  padding:0 10px;
+  border:1px solid rgba(242,180,92,.2);
+  border-radius:999px;
+  background:rgba(242,180,92,.065);
+  color:var(--amber);
+  font-size:9px;
+  letter-spacing:.03em;
+  transition:all .25s var(--ease);
+}
+.run-btn:hover{background:rgba(242,180,92,.115);border-color:rgba(242,180,92,.34)}
+.run-btn.is-paused{
+  border-color:rgba(178,214,230,.14);
+  background:rgba(255,255,255,.025);
+  color:var(--muted);
+}
+.run-icon{
+  position:relative;
+  width:9px;
+  height:9px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+}
+.run-icon i{
+  display:block;
+  width:1.5px;
+  height:6px;
+  border-radius:1px;
+  background:currentColor;
+}
+.run-btn.is-paused .run-icon i:first-child{
+  width:0;
+  height:0;
+  border-top:3.5px solid transparent;
+  border-bottom:3.5px solid transparent;
+  border-left:5px solid currentColor;
+  border-radius:0;
+  background:transparent;
+}
+.run-btn.is-paused .run-icon i:last-child{display:none}
+.rpm-strip{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  margin-top:12px;
+}
+.rpm-state{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  padding-bottom:2px;
+  color:var(--amber);
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.1em;
+}
+.rpm-state i{
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 7px currentColor;
+  animation:live-pulse 1.6s ease-in-out infinite;
+}
+.rpm-state.is-paused{color:var(--muted-2)}
+.rpm-state.is-paused i{animation:none;box-shadow:none}
+@keyframes live-pulse{50%{opacity:.36}}
+.rpm-number{
+  display:flex;
+  align-items:baseline;
+  gap:4px;
+  color:#edf8fd;
+  font-family:var(--font-mono);
+}
+.rpm-number b{
+  font-size:21px;
+  font-weight:450;
+  line-height:1;
+  letter-spacing:-.04em;
+  font-variant-numeric:tabular-nums;
+}
+.rpm-number span{
+  color:var(--muted-2);
+  font-size:8px;
+  letter-spacing:.06em;
+}
+.rpm-range{margin-top:8px;--range-accent:var(--amber)}
+.range-caption{
+  display:flex;
+  justify-content:space-between;
+  gap:6px;
+  margin-top:5px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:7.5px;
+  letter-spacing:.02em;
+}
+.range-caption span:nth-child(2){
+  color:#657b86;
+  font-family:var(--font-sans);
+  font-size:8px;
+  letter-spacing:.01em;
+}
+
+/* ============================================================
+   05 · 底部拆解控制台
+   ============================================================ */
+.control-dock{
+  position:fixed;
+  left:50%;
+  bottom:24px;
+  z-index:11;
+  width:min(648px,calc(100vw - 690px));
+  min-width:490px;
+  padding:9px 12px 12px;
+  transform:translateX(-50%);
+  pointer-events:auto;
+}
+.dock-toolbar{
+  display:flex;
+  align-items:center;
+  gap:3px;
+  padding:0 1px 8px;
+  border-bottom:1px solid rgba(178,214,230,.075);
+}
+.tool-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  height:26px;
+  padding:0 8px;
+  border:1px solid transparent;
+  border-radius:6px;
+  color:#748894;
+  font-size:9px;
+  line-height:1;
+  letter-spacing:.02em;
+  transition:all .22s var(--ease);
+  white-space:nowrap;
+}
+.tool-btn .icon{width:12px;height:12px;opacity:.82}
+.tool-btn kbd{height:16px;min-width:16px;padding:0 4px;font-size:8px;opacity:.62}
+.tool-btn:hover{color:var(--ink-soft);background:rgba(255,255,255,.032)}
+.tool-btn.is-active{
+  border-color:rgba(var(--accent-rgb),.16);
+  background:rgba(var(--accent-rgb),.07);
+  color:var(--accent);
+}
+.tool-btn.is-active kbd{opacity:.85}
+.tool-spacer{flex:1 1 auto}
+#helpBtn{color:#5e727e}
+.explode-control{
+  display:grid;
+  grid-template-columns:122px minmax(180px,1fr) 134px;
+  align-items:center;
+  gap:15px;
+  padding-top:10px;
+}
+.explode-title{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:8px;
+  min-width:0;
+}
+.explode-title h2{
+  margin-top:1px;
+  color:#cad9e0;
+  font-size:12px;
+  font-weight:540;
+  letter-spacing:.03em;
+}
+.explode-readout{
+  display:flex;
+  align-items:baseline;
+  margin-bottom:-2px;
+  color:#e9f7fc;
+  font-family:var(--font-mono);
+  font-variant-numeric:tabular-nums;
+}
+.explode-readout b{
+  font-size:20px;
+  font-weight:400;
+  line-height:1;
+  letter-spacing:-.045em;
+}
+.explode-readout span{
+  margin-left:2px;
+  color:var(--muted-2);
+  font-size:8px;
+}
+.explode-slider-wrap{padding-top:1px}
+.explode-scale{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+  margin-top:5px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:7.5px;
+  letter-spacing:.02em;
+}
+.explode-scale span:last-child{text-align:right}
+.explode-scale i{
+  flex:1;
+  height:1px;
+  max-width:12px;
+  background:rgba(163,200,216,.13);
+}
+.explode-btn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:7px;
+  height:40px;
+  padding:0 10px;
+  border:1px solid rgba(var(--accent-rgb),.19);
+  border-radius:9px;
+  background:
+    linear-gradient(110deg,rgba(var(--accent-rgb),.14),rgba(var(--accent-rgb),.055));
+  color:#dbf7ff;
+  font-size:10px;
+  font-weight:520;
+  letter-spacing:.03em;
+  transition:all .24s var(--ease);
+  white-space:nowrap;
+}
+.explode-btn:hover{
+  border-color:rgba(var(--accent-rgb),.35);
+  background:linear-gradient(110deg,rgba(var(--accent-rgb),.2),rgba(var(--accent-rgb),.075));
+  transform:translateY(-1px);
+}
+.explode-btn:active{transform:translateY(0)}
+.explode-btn kbd{
+  min-width:17px;
+  height:16px;
+  padding:0 4px;
+  border-color:rgba(195,232,245,.18);
+  color:#a5c4d0;
+  font-size:8px;
+}
+.explode-btn-icon{
+  position:relative;
+  width:12px;
+  height:10px;
+}
+.explode-btn-icon i{
+  position:absolute;
+  left:1px;
+  display:block;
+  height:1px;
+  border-radius:1px;
+  background:currentColor;
+  transition:all .35s var(--ease);
+}
+.explode-btn-icon i:nth-child(1){top:1px;width:10px}
+.explode-btn-icon i:nth-child(2){top:4.5px;width:7px;opacity:.72}
+.explode-btn-icon i:nth-child(3){top:8px;width:4px;opacity:.45}
+.explode-btn.is-open .explode-btn-icon i:nth-child(1){transform:translateY(3.5px)}
+.explode-btn.is-open .explode-btn-icon i:nth-child(2){transform:translateY(0);width:10px;opacity:1}
+.explode-btn.is-open .explode-btn-icon i:nth-child(3){transform:translateY(-3.5px);width:10px;opacity:1}
+.range{
+  --fill:0%;
+  --range-accent:var(--accent);
+  -webkit-appearance:none;
+  appearance:none;
+  display:block;
+  width:100%;
+  height:16px;
+  margin:0;
+  padding:0;
+  border:0;
+  background:transparent;
+  cursor:pointer;
+}
+.range::-webkit-slider-runnable-track{
+  height:3px;
+  border-radius:99px;
+  background:linear-gradient(90deg,var(--range-accent) 0%,var(--range-accent) var(--fill),rgba(174,209,224,.11) var(--fill),rgba(174,209,224,.11) 100%);
+}
+.range::-moz-range-track{
+  height:3px;
+  border-radius:99px;
+  background:linear-gradient(90deg,var(--range-accent) 0%,var(--range-accent) var(--fill),rgba(174,209,224,.11) var(--fill),rgba(174,209,224,.11) 100%);
+}
+.range::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:13px;
+  height:13px;
+  margin-top:-5px;
+  border:2px solid #071015;
+  border-radius:50%;
+  background:#dff9ff;
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.45),0 0 13px rgba(var(--accent-rgb),.36);
+  transition:transform .16s var(--ease),box-shadow .16s var(--ease);
+}
+.range::-moz-range-thumb{
+  width:11px;
+  height:11px;
+  border:2px solid #071015;
+  border-radius:50%;
+  background:#dff9ff;
+  box-shadow:0 0 0 1px rgba(var(--accent-rgb),.45),0 0 13px rgba(var(--accent-rgb),.36);
+}
+.range:hover::-webkit-slider-thumb{transform:scale(1.15);box-shadow:0 0 0 1px rgba(var(--accent-rgb),.7),0 0 17px rgba(var(--accent-rgb),.55)}
+.rpm-range::-webkit-slider-thumb{
+  background:#ffe0a8;
+  box-shadow:0 0 0 1px rgba(242,180,92,.55),0 0 12px rgba(242,180,92,.3);
+}
+.rpm-range::-moz-range-thumb{
+  background:#ffe0a8;
+  box-shadow:0 0 0 1px rgba(242,180,92,.55),0 0 12px rgba(242,180,92,.3);
+}
+
+/* ============================================================
+   06 · 右下角快捷键与三维标签
+   ============================================================ */
+.hints{
+  position:fixed;
+  right:24px;
+  bottom:24px;
+  z-index:9;
+  width:254px;
+  padding:12px 13px 11px;
+  transition:opacity .35s var(--ease),transform .35s var(--ease),visibility .35s;
+  pointer-events:auto;
+}
+.hints.is-hidden{
+  opacity:0;
+  visibility:hidden;
+  transform:translateY(8px);
+}
+.hints-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:9px;
+  padding-bottom:8px;
+  border-bottom:1px solid rgba(178,214,230,.075);
+}
+.hints-live{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  color:var(--green);
+  font-family:var(--font-mono);
+  font-size:7.5px;
+  letter-spacing:.12em;
+}
+.hints-live i{
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:currentColor;
+  box-shadow:0 0 7px currentColor;
+}
+.hint-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  min-height:21px;
+  color:#7d929e;
+  font-size:9px;
+  white-space:nowrap;
+}
+.hint-row>span{display:flex;align-items:center;gap:5px}
+.hint-row kbd{font-size:8px;color:#a6bac4}
+.mouse-hint{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px solid rgba(178,214,230,.075);
+  color:#647985;
+  font-size:8px;
+}
+.mouse-hint>span{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.mouse{
+  position:relative;
+  display:inline-block;
+  width:10px;
+  height:13px;
+  border:1px solid #566d7a;
+  border-radius:5px;
+}
+.mouse.left::before,.mouse.right::before{
+  content:"";
+  position:absolute;
+  top:1px;
+  width:3px;
+  height:4px;
+  background:rgba(var(--accent-rgb),.6);
+}
+.mouse.left::before{left:1.5px;border-radius:4px 0 1px 0}
+.mouse.right::before{right:1.5px;border-radius:0 4px 0 1px}
+.wheel{
+  display:inline-block;
+  width:2px;
+  height:6px;
+  margin:0 3px;
+  border-radius:2px;
+  background:#566d7a;
+}
+.toast{
+  position:fixed;
+  left:50%;
+  bottom:166px;
+  z-index:50;
+  max-width:min(420px,calc(100vw - 32px));
+  padding:8px 13px;
+  border:1px solid rgba(178,214,230,.15);
+  border-radius:8px;
+  background:rgba(7,13,18,.88);
+  color:#b9cdd7;
+  font-size:10px;
+  letter-spacing:.02em;
+  box-shadow:0 12px 30px rgba(0,0,0,.35);
+  -webkit-backdrop-filter:blur(14px);
+  backdrop-filter:blur(14px);
+  opacity:0;
+  pointer-events:none;
+  transform:translate(-50%,6px);
+  transition:opacity .25s var(--ease),transform .25s var(--ease);
+}
+.toast.is-visible{opacity:1;transform:translate(-50%,0)}
+
+.part-label{
+  --part-color:var(--accent);
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:180px;
+  padding:3px 7px 3px 6px;
+  border:1px solid rgba(175,215,230,.13);
+  border-radius:999px;
+  background:rgba(6,12,16,.62);
+  box-shadow:0 5px 15px rgba(0,0,0,.25);
+  -webkit-backdrop-filter:blur(9px);
+  backdrop-filter:blur(9px);
+  color:#a8bdc7;
+  font-family:var(--font-sans);
+  font-size:9px;
+  line-height:1.25;
+  letter-spacing:.035em;
+  white-space:nowrap;
+  cursor:pointer;
+  pointer-events:auto;
+  opacity:.72;
+  transition:opacity .2s var(--ease),border-color .2s var(--ease),color .2s var(--ease),transform .2s var(--ease);
+}
+.part-label::after{
+  content:"";
+  position:absolute;
+  left:-11px;
+  top:50%;
+  width:7px;
+  height:1px;
+  background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--part-color) 65%,transparent));
+}
+.part-label:hover{
+  opacity:1;
+  border-color:rgba(175,215,230,.26);
+  color:#ecf8fc;
+  transform:scale(1.03);
+}
+.part-label.is-selected{
+  opacity:1;
+  border-color:color-mix(in srgb,var(--part-color) 45%,transparent);
+  color:#f2fbff;
+  background:rgba(7,15,20,.83);
+  box-shadow:0 5px 18px rgba(0,0,0,.3),0 0 16px color-mix(in srgb,var(--part-color) 13%,transparent);
+}
+.label-pip{
+  flex:0 0 auto;
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:var(--part-color);
+  box-shadow:0 0 7px color-mix(in srgb,var(--part-color) 65%,transparent);
+}
+.part-label .label-en{
+  color:#637b87;
+  font-family:var(--font-mono);
+  font-size:7px;
+  letter-spacing:0;
+  transition:color .2s var(--ease);
+}
+.part-label.is-selected .label-en,.part-label:hover .label-en{color:#8fa8b4}
+.part-label--air{gap:5px;opacity:.52}
+.part-label--air .label-pip{
+  background:transparent;
+  border:1px solid var(--part-color);
+  box-shadow:0 0 6px color-mix(in srgb,var(--part-color) 40%,transparent);
+}
+
+/* ============================================================
+   07 · 加载层
+   ============================================================ */
+.loader{
+  position:fixed;
+  inset:0;
+  z-index:100;
+  display:grid;
+  place-items:center;
+  background:
+    radial-gradient(ellipse 44% 44% at 50% 47%,rgba(19,45,56,.66),transparent 75%),
+    #060b0f;
+  transition:opacity .8s var(--ease),visibility .8s;
+}
+.loader.is-hidden{opacity:0;visibility:hidden;pointer-events:none}
+.loader-inner{
+  width:min(330px,calc(100vw - 48px));
+  text-align:center;
+}
+.loader-emblem{
+  position:relative;
+  width:88px;
+  height:88px;
+  margin:0 auto 24px;
+}
+.loader-emblem .rotor,
+.loader-emblem .stator,
+.loader-emblem .core{
+  position:absolute;
+  top:50%;
+  left:50%;
+  border-radius:50%;
+  transform:translate(-50%,-50%);
+}
+.loader-emblem .rotor{
+  width:88px;
+  height:88px;
+  border:1px solid rgba(var(--accent-rgb),.14);
+}
+.loader-emblem .rotor::before{
+  content:"";
+  position:absolute;
+  inset:-1px;
+  border:1px solid transparent;
+  border-top-color:rgba(var(--accent-rgb),.8);
+  border-right-color:rgba(var(--accent-rgb),.18);
+  border-radius:50%;
+  animation:loader-spin 1.4s cubic-bezier(.5,.15,.5,.85) infinite;
+}
+.loader-emblem .stator{
+  width:60px;
+  height:60px;
+  border:1px dashed rgba(var(--accent-rgb),.28);
+  animation:loader-spin 10s linear infinite reverse;
+}
+.loader-emblem .stator::before{
+  content:"";
+  position:absolute;
+  inset:8px;
+  border:5px dotted rgba(135,176,193,.25);
+  border-radius:50%;
+}
+.loader-emblem .core{
+  width:23px;
+  height:23px;
+  border:1px solid rgba(var(--accent-rgb),.46);
+  background:radial-gradient(circle at 38% 32%,rgba(var(--accent-rgb),.3),rgba(var(--accent-rgb),.04) 70%);
+  box-shadow:0 0 26px rgba(var(--accent-rgb),.12);
+  animation:core-pulse 2.6s ease-in-out infinite;
+}
+.loader-emblem .core::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:#c9f6ff;
+  box-shadow:0 0 12px rgba(var(--accent-rgb),.9);
+  transform:translate(-50%,-50%);
+}
+@keyframes loader-spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes core-pulse{50%{box-shadow:0 0 34px rgba(var(--accent-rgb),.25)}}
+.loader-kicker{
+  margin-bottom:9px;
+  color:var(--accent);
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.18em;
+  text-transform:uppercase;
+}
+.loader h2{
+  color:#eef9fc;
+  font-size:19px;
+  font-weight:500;
+  letter-spacing:.03em;
+}
+.loader-meta{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:22px;
+  color:var(--muted-2);
+  font-family:var(--font-mono);
+  font-size:8px;
+  letter-spacing:.04em;
+}
+.loader-track{
+  height:2px;
+  margin-top:8px;
+  overflow:hidden;
+  border-radius:3px;
+  background:rgba(173,211,227,.09);
+}
+.loader-track i{
+  display:block;
+  width:8%;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,rgba(var(--accent-rgb),.15),var(--accent));
+  box-shadow:0 0 11px rgba(var(--accent-rgb),.5);
+  transition:width .55s var(--ease);
+}
+.loader-note{
+  margin-top:16px;
+  color:#405460;
+  font-family:var(--font-mono);
+  font-size:7.5px;
+  letter-spacing:.08em;
+}
+
+/* ============================================================
+   08 · 自适应布局
+   ============================================================ */
+@media (max-width:1380px){
+  .control-dock{width:min(610px,calc(100vw - 660px));min-width:470px}
+  .explode-control{grid-template-columns:112px minmax(150px,1fr) 128px;gap:12px}
+  .hints{width:238px}
+}
+@media (max-width:1240px){
+  .hints{display:none}
+  .info-panel{width:300px}
+  .left-rail{width:278px}
+}
+@media (max-width:1160px){
+  .control-dock{
+    left:330px;
+    right:24px;
+    width:auto;
+    min-width:0;
+    transform:none;
+  }
+  .info-panel{width:286px;max-height:calc(100vh - 300px)}
+  .drive-block{padding:12px 14px 13px}
+  .explode-control{grid-template-columns:100px minmax(130px,1fr) 126px}
+}
+@media (max-width:960px){
+  .left-rail{width:250px;top:18px;left:18px;max-height:calc(100vh - 205px)}
+  .info-panel{right:18px;top:18px;width:266px;max-height:calc(100vh - 205px)}
+  .masthead h1{font-size:23px}
+  .masthead .subline{font-size:10px;gap:7px}
+  .part-name .en{display:none}
+  .part-item{min-height:32px}
+  .info-desc{font-size:10.5px}
+  .control-dock{left:286px;right:18px;bottom:18px}
+  .explode-control{grid-template-columns:92px minmax(110px,1fr) 120px;gap:10px}
+  .tool-btn{padding:0 6px}
+  .tool-btn kbd{display:none}
+}
+@media (max-width:820px){
+  .left-rail{width:224px;max-height:calc(100vh - 180px)}
+  .info-panel{width:240px;min-height:260px}
+  .masthead h1{font-size:20px}
+  .masthead .subline{flex-wrap:wrap;max-width:220px;line-height:1.4}
+  .brand-line{font-size:7.5px;letter-spacing:.13em}
+  .view-btn{font-size:9px}
+  .control-dock{left:18px;right:18px;bottom:14px}
+  .info-panel{max-height:calc(100vh - 315px)}
+  .hints{display:none}
+  .explode-control{grid-template-columns:88px minmax(120px,1fr) 118px}
+  .tool-btn span:not(.state-dot){display:inline}
+}
+@media (max-height:780px) and (min-width:961px){
+  .info-panel{max-height:calc(100vh - 250px)}
+  .left-rail{max-height:calc(100vh - 48px)}
+  .masthead .subline{margin-top:8px}
+  .masthead h1{font-size:26px}
+  .control-dock{bottom:16px;padding-top:7px}
+  .hints{bottom:16px}
+  .toast{bottom:150px}
+}
+@media (max-width:700px){
+  .left-rail{
+    top:12px;
+    left:12px;
+    width:210px;
+    max-height:44vh;
+    gap:8px;
+  }
+  .masthead{padding-bottom:0}
+  .brand-line{margin-bottom:8px}
+  .masthead h1{font-size:17px}
+  .masthead h1 .title-soft{font-size:.62em;margin-top:2px}
+  .masthead .subline{display:none}
+  .view-bar{padding:3px}
+  .view-btn{height:26px;font-size:8px}
+  .parts-panel{min-height:0;flex:1}
+  .panel-heading{min-height:38px;padding:8px 11px}
+  .panel-heading .kicker{display:none}
+  .part-list{max-height:24vh}
+  .part-item{min-height:29px}
+  .panel-footer{padding:6px;gap:4px}
+  .soft-btn{height:24px;font-size:8px;padding:0 6px}
+  .info-panel{
+    top:12px;
+    right:12px;
+    width:calc(100vw - 246px);
+    min-width:180px;
+    max-height:44vh;
+    min-height:0;
+  }
+  .info-panel-head{padding:8px 11px;min-height:38px}
+  .info-empty{padding:8px 12px;min-height:80px}
+  .empty-orbit{display:none}
+  .info-empty p{font-size:9px;line-height:1.5;max-width:200px}
+  .info-body{padding:11px}
+  .drive-block{padding:9px 11px 10px}
+  .range-caption span:nth-child(2){display:none}
+  .control-dock{left:12px;right:12px;bottom:10px;padding:7px 9px 9px}
+  .dock-toolbar{padding-bottom:6px;gap:1px;overflow-x:auto;scrollbar-width:none}
+  .dock-toolbar::-webkit-scrollbar{display:none}
+  .tool-btn{font-size:8px;height:24px;padding:0 5px}
+  .tool-btn .icon{width:11px;height:11px}
+  .explode-control{grid-template-columns:72px minmax(80px,1fr) 104px;gap:8px;padding-top:7px}
+  .explode-title h2{font-size:10px}
+  .explode-title .kicker{display:none}
+  .explode-readout b{font-size:17px}
+  .explode-btn{height:34px;font-size:9px;padding:0 7px;gap:5px}
+  .explode-btn kbd{display:none}
+  .explode-scale i{display:none}
+  .explode-scale{font-size:6.5px}
+  .toast{bottom:124px}
+}
+@media (max-width:520px){
+  .left-rail{width:calc(100vw - 24px);max-height:none;pointer-events:none}
+  .masthead,.view-bar{pointer-events:auto}
+  .masthead h1{font-size:16px}
+  .view-bar{width:210px}
+  .mobile-tools{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:3px;
+    width:210px;
+    padding:3px;
+    border-radius:12px;
+    pointer-events:auto;
+  }
+  .mobile-tool-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    height:26px;
+    border-radius:9px;
+    color:var(--muted);
+    font-size:9px;
+    letter-spacing:.03em;
+    transition:color .25s var(--ease),background .25s var(--ease),box-shadow .25s var(--ease);
+  }
+  .mobile-tool-btn b{
+    color:var(--muted-2);
+    font-family:var(--font-mono);
+    font-size:8px;
+    font-weight:500;
+  }
+  .mobile-tool-btn[aria-expanded="true"]{
+    color:#effcff;
+    background:rgba(var(--accent-rgb),.115);
+    box-shadow:inset 0 0 0 1px rgba(var(--accent-rgb),.18);
+  }
+  .mobile-tool-btn[aria-expanded="true"] b{color:var(--accent)}
+  .left-rail .parts-panel{display:none}
+  .left-rail.is-parts-open .parts-panel{
+    position:absolute;
+    top:calc(100% + 8px);
+    left:0;
+    right:0;
+    z-index:2;
+    display:flex;
+    min-height:0;
+    max-height:46vh;
+    background:var(--glass-strong);
+    box-shadow:0 24px 70px rgba(0,0,0,.55);
+  }
+  .left-rail.is-parts-open .part-list{max-height:none}
+  .info-panel{display:none}
+  .info-panel.is-mobile-open{
+    position:fixed;
+    top:auto;
+    bottom:128px;
+    left:12px;
+    right:12px;
+    z-index:12;
+    width:auto;
+    min-width:0;
+    max-height:46vh;
+    min-height:0;
+    display:flex;
+    background:var(--glass-strong);
+    box-shadow:0 24px 70px rgba(0,0,0,.55);
+  }
+  .info-panel.is-mobile-open .info-panel-head{padding-right:62px}
+  .info-panel.is-mobile-open .file-index{display:none}
+  .mobile-panel-close{
+    position:absolute;
+    top:10px;
+    right:10px;
+    z-index:3;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    height:24px;
+    padding:0 9px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:rgba(255,255,255,.03);
+    color:var(--muted);
+    font-size:8px;
+    letter-spacing:.04em;
+  }
+  .control-dock{left:10px;right:10px;bottom:8px}
+  .explode-control{grid-template-columns:66px minmax(70px,1fr) 96px}
+  .explode-btn span:nth-child(2){font-size:8px}
+  .load{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="scene-host" id="sceneHost" aria-label="永磁同步电机三维模型"></div>
+  <div class="label-layer" id="labelLayer"></div>
+
+  <div class="left-rail" id="leftRail">
+    <header class="masthead">
+      <div class="brand-line">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>PMSM · Interactive Teardown</span>
+      </div>
+      <h1>永磁同步电机<span class="title-soft">交互式三维拆解演示</span></h1>
+      <p class="subline">
+        <span>24 槽定子</span><span class="spec-dot"></span>
+        <span>4 极永磁转子</span><span class="spec-dot"></span>
+        <span>1 单位 ≈ 1 cm</span>
+      </p>
+    </header>
+
+    <nav class="view-bar panel" aria-label="视角预设">
+      <button class="view-btn is-active" type="button" data-view="iso">等轴测</button>
+      <button class="view-btn" type="button" data-view="front">正视</button>
+      <button class="view-btn" type="button" data-view="section">剖面</button>
+      <button class="view-btn" type="button" data-view="reset">复位</button>
+    </nav>
+
+    <div class="mobile-tools panel" role="group" aria-label="移动端面板">
+      <button class="mobile-tool-btn" type="button" id="mobilePartsBtn" aria-expanded="false" aria-controls="partsPanel">
+        <span>部件清单</span><b>12</b>
+      </button>
+      <button class="mobile-tool-btn" type="button" id="mobileInfoBtn" aria-expanded="false" aria-controls="infoPanel">
+        <span>档案 / 旋转</span>
+      </button>
+    </div>
+
+    <aside class="parts-panel panel" id="partsPanel" aria-label="部件清单">
+      <div class="panel-heading">
+        <div class="heading-copy">
+          <div>
+            <div class="kicker">Component Index</div>
+            <h2>部件清单</h2>
+          </div>
+        </div>
+        <span class="count-badge" id="partCount">12</span>
+      </div>
+      <div class="part-list" id="partList" role="list"></div>
+      <div class="phase-legend" aria-label="三相绕组颜色图例">
+        <span class="phase-legend-title">WINDING</span>
+        <span style="--dot:#ffc247"><i></i>U</span>
+        <span style="--dot:#48dba2"><i></i>V</span>
+        <span style="--dot:#ff5f68"><i></i>W</span>
+        <span class="phase-legend-note">三相分布</span>
+      </div>
+      <div class="panel-footer">
+        <button class="soft-btn" type="button" id="isolateBtn" aria-pressed="false">
+          <span class="state-dot"></span>隔离选中
+        </button>
+        <button class="soft-btn" type="button" id="showAllBtn">全部显示</button>
+      </div>
+    </aside>
+  </div>
+
+  <aside class="info-panel panel" id="infoPanel" aria-label="部件档案">
+    <button class="mobile-panel-close" type="button" id="infoCloseBtn">收起</button>
+    <div class="info-panel-head">
+      <div>
+        <div class="kicker">Component Profile</div>
+        <h2>部件档案</h2>
+      </div>
+      <span class="file-index" id="infoFileIndex">NO SELECTION</span>
+    </div>
+
+    <div class="info-empty" id="infoEmpty">
+      <div class="empty-orbit" aria-hidden="true">
+        <span></span><i></i>
+      </div>
+      <strong>选择一个部件</strong>
+      <p>点击三维模型或左侧清单，查看材料、关键参数与结构功能。</p>
+    </div>
+
+    <article class="info-body" id="partInfo" hidden>
+      <div class="info-accent" id="infoAccent"></div>
+      <div class="info-title-row">
+        <span class="info-number" id="infoNumber">01</span>
+        <div>
+          <h2 id="infoName">机壳</h2>
+          <div class="info-en" id="infoNameEn">Housing</div>
+        </div>
+      </div>
+      <div class="info-meta">
+        <span id="infoMaterial">铝合金 · 阳极氧化</span>
+        <span id="infoSpec">φ150 × 108 mm</span>
+      </div>
+      <p class="info-description" id="infoDescription"></p>
+      <dl class="info-detail">
+        <div><dt>装配角色</dt><dd id="infoRole">—</dd></div>
+        <div><dt>拆解方向</dt><dd id="infoOffset">—</dd></div>
+      </dl>
+    </article>
+
+    <section class="drive-block" aria-label="转子旋转演示">
+      <div class="drive-heading">
+        <div>
+          <div class="kicker">Rotation Demo</div>
+          <h3>旋转磁场</h3>
+        </div>
+        <button class="run-btn is-running" type="button" id="spinBtn" aria-pressed="true">
+          <span class="run-icon" aria-hidden="true"><i></i><i></i></span>
+          <span id="spinBtnText">暂停</span>
+        </button>
+      </div>
+      <div class="rpm-strip">
+        <span class="rpm-state" id="rpmState"><i></i>RUNNING</span>
+        <div class="rpm-number"><b id="rpmValue">36</b><span>rpm</span></div>
+      </div>
+      <input class="range rpm-range" id="speedRange" type="range" min="6" max="180" step="1" value="36" aria-label="转子转速" style="--fill:17.24%">
+      <div class="range-caption"><span>6</span><span>拖动调速 · 槽内绕组流光示意旋转磁场</span><span>180</span></div>
+    </section>
+  </aside>
+
+  <footer class="control-dock panel" aria-label="拆解控制台">
+    <div class="dock-toolbar">
+      <button class="tool-btn" type="button" id="transparentBtn" aria-pressed="false">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.8 8s2.3-4 6.2-4 6.2 4 6.2 4-2.3 4-6.2 4S1.8 8 1.8 8Z"/><circle cx="8" cy="8" r="1.7"/></svg>
+        透明外壳 <kbd>T</kbd>
+      </button>
+      <button class="tool-btn" type="button" id="sectionBtn" aria-pressed="false">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.7v12.6"/><path d="M2.2 5.2a6.9 6.9 0 0 1 11.6 0"/><path d="M2.2 10.8a6.9 6.9 0 0 0 11.6 0" stroke-dasharray="1.8 2"/></svg>
+        轴向剖切 <kbd>C</kbd>
+      </button>
+      <button class="tool-btn is-active" type="button" id="labelsBtn" aria-pressed="true">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.2h5.1c.4 0 .8.2 1 .5l4.6 4.6-4.5 4.5-4.6-4.6a1.5 1.5 0 0 1-.5-1V4.2Z"/><circle cx="5.1" cy="6.5" r=".8"/></svg>
+        部件标签 <kbd>L</kbd>
+      </button>
+      <span class="tool-spacer"></span>
+      <button class="tool-btn" type="button" id="helpBtn">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.1"/><path d="M6.2 6.2a1.9 1.9 0 0 1 3.7.4c0 1.3-1.9 1.4-1.9 2.8"/><path d="M8 12.2v.1"/></svg>
+        操作提示
+      </button>
+    </div>
+    <div class="explode-control">
+      <div class="explode-title">
+        <div>
+          <div class="kicker">Exploded Assembly</div>
+          <h2>拆解进程</h2>
+        </div>
+        <div class="explode-readout"><b id="explodeValue">0</b><span>%</span></div>
+      </div>
+      <div class="explode-slider-wrap">
+        <input class="range explode-range" id="explodeRange" type="range" min="0" max="100" step="0.1" value="0" aria-label="拆解程度" style="--fill:0%">
+        <div class="explode-scale" aria-hidden="true">
+          <span>装配</span>
+          <i></i><i></i><i></i><i></i>
+          <span>完全拆解</span>
+        </div>
+      </div>
+      <button class="explode-btn" type="button" id="explodeToggle" aria-pressed="false">
+        <span class="explode-btn-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span id="explodeBtnText">一键拆解</span>
+        <kbd>E</kbd>
+      </button>
+    </div>
+  </footer>
+
+  <aside class="hints panel" id="hints" aria-label="操作提示">
+    <div class="hints-head">
+      <span class="kicker">Controls</span>
+      <span class="hints-live"><i></i>LIVE</span>
+    </div>
+    <div class="hint-row"><span><kbd>R</kbd>复位视角</span><span><kbd>E</kbd>拆解 / 装配</span></div>
+    <div class="hint-row"><span><kbd>Space</kbd>暂停旋转</span><span><kbd>L</kbd>显示标签</span></div>
+    <div class="hint-row"><span><kbd>T</kbd>透明外壳</span><span><kbd>C</kbd>轴向剖切</span></div>
+    <div class="mouse-hint">
+      <span><i class="mouse left"></i>左键旋转</span>
+      <span><i class="mouse right"></i>右键平移</span>
+      <span><i class="wheel"></i>滚轮缩放</span>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="loader" id="loader">
+    <div class="loader-inner">
+      <div class="loader-emblem" aria-hidden="true">
+        <span class="rotor"></span>
+        <span class="stator"></span>
+        <span class="core"></span>
+      </div>
+      <div class="loader-kicker">Permanent Magnet Synchronous Motor</div>
+      <h2>正在装配电机</h2>
+      <div class="loader-meta"><span id="loaderStatus">初始化 Three.js 场景</span><span>24S / 4P</span></div>
+      <div class="loader-track"><i id="loaderBar"></i></div>
+      <div class="loader-note">程序化几何 · 无外部模型依赖</div>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<script>
+  window.__appReady = false;
+  window.setTimeout(function(){
+    if (window.__appReady) return;
+    var status = document.getElementById('loaderStatus');
+    var note = document.querySelector('.loader-note');
+    if (status) status.textContent = '加载时间较长，请检查网络连接';
+    if (note) note.textContent = 'Three.js 通过 CDN 加载，首次打开需要联网';
+    var bar = document.getElementById('loaderBar');
+    if (bar) bar.style.width = '18%';
+  }, 9000);
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutlinePass } from 'three/addons/postprocessing/OutlinePass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ============================================================
+   01 · 集中参数
+   ------------------------------------------------------------
+   1 个 Three.js 单位 ≈ 1 cm。修改下列参数即可重构建模，
+   爆炸位移集中定义在 PARTS[].explodedOffset，方向向量可调。
+   ============================================================ */
+const DEG = Math.PI / 180;
+const EXPLODE_SCALE = 1.0;
+
+const PARAMS = {
+  slotCount: 24,             // 定子槽数
+  polePairs: 2,              // 极对数（2 对极 = 4 极）
+  coreLength: 8.6,           // 定子/转子轴向长度
+  statorOuterR: 6.35,
+  statorBoreR: 4.15,
+  slotShoulderR: 4.56,
+  slotBottomR: 5.52,
+  slotOpenHalfDeg: 2.35,     // 槽口半角
+  slotShoulderHalfDeg: 5.0,  // 槽肩半角
+  slotBottomHalfDeg: 4.55,   // 槽底半角
+  laminationCount: 14,
+  laminationGap: 0.07,
+  rotorR: 3.8,
+  magnetThickness: 0.25,
+  magnetArcDeg: 78,
+  magnetLength: 7.82,
+  housingOuterR: 7.05,
+  housingLength: 10.8,
+  finCount: 32,
+  finGapTopDeg: 19,          // 接线盒安装区，不布置散热筋
+  finGapBottomDeg: 48,       // 底脚安装区
+  capZ: 6.05,
+  capRadius: 6.45,
+  bearingZ: 5.24,
+  bearingBallCount: 10,
+  shaftRearZ: -8.0,
+  shaftFrontZ: 13.8,
+  terminalLocalY: 8.12,
+  airGapR: 4.1,
+};
+
+const PHASES = [
+  { key:'U', css:'#ffc247', color:0xffc247, glow:0xffa200, name:'U 相' },
+  { key:'V', css:'#48dba2', color:0x48dba2, glow:0x00b877, name:'V 相' },
+  { key:'W', css:'#ff5f68', color:0xff5f68, glow:0xd92639, name:'W 相' },
+];
+
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+const scaledOffset = (x, y, z) => V3(x, y, z).multiplyScalar(EXPLODE_SCALE);
+
+/* ============================================================
+   02 · 部件注册表
+   ------------------------------------------------------------
+   userData 中会同步写入 id/name/nameEn/description/material/
+   explodedOffset。build 函数在后方按职责逐一实现。
+   ============================================================ */
+const PARTS = [
+  {
+    id:'housing', name:'机壳', nameEn:'Housing',
+    material:'压铸铝合金 · 阳极氧化',
+    spec:'外径 φ150 / 长 108 mm',
+    role:'承载定子 · 散热 · 机械防护',
+    color:'#93a7b4',
+    description:'机壳以压铸铝合金制成，环形壁体包覆定子铁芯并承受整机扭矩；外壁均布的轴向散热筋扩大散热面积，前后端止口保证端盖同轴。底脚与安装孔把电机可靠固定于机架，降低运行振动。',
+    explodedOffset:scaledOffset(0, 10.8, 0),
+    labelPos:V3(3.8, 8.0, 2.0),
+    build:buildHousing,
+  },
+  {
+    id:'frontCap', name:'前端盖', nameEn:'Front End Cap',
+    material:'球墨铸铁 · 喷砂处理',
+    spec:'φ129 × 11 mm / 8×M6',
+    role:'定位前轴承 · 封闭机壳',
+    color:'#c7d1d8',
+    description:'前端盖封闭机壳前端并定位前轴承，中心轴承座保证转轴与定子严格同轴。外缘螺栓将端盖压紧在机壳止口上，径向加强筋提升刚度，同时帮助轴承热量传向机壳。',
+    explodedOffset:scaledOffset(0, 0, 15.0),
+    labelPos:V3(4.4, 4.4, 7.0),
+    build:buildFrontEndCap,
+  },
+  {
+    id:'rearCap', name:'后端盖', nameEn:'Rear End Cap',
+    material:'球墨铸铁 · 喷砂处理',
+    spec:'φ129 × 11 mm / 8×M6',
+    role:'定位后轴承 · 尾部封闭',
+    color:'#aebbc4',
+    description:'后端盖支撑后轴承并封闭机壳尾端，中心止口与轴承座共同维持转轴的同轴度。端盖周边均布螺栓，承受轴向磁拉力与轴承反力，并为后轴承提供稳定的散热路径。',
+    explodedOffset:scaledOffset(0, 0, -15.0),
+    labelPos:V3(-4.4, 4.4, -7.0),
+    build:buildRearEndCap,
+  },
+  {
+    id:'statorCore', name:'定子铁芯', nameEn:'Stator Core',
+    material:'高牌号无取向硅钢片',
+    spec:'24 槽 / 叠厚 86 mm / 14 层',
+    role:'主磁路 · 安放三相绕组',
+    color:'#718494',
+    description:'定子铁芯由高磁导率硅钢片逐层叠压而成，内圆冲出 24 个半闭口槽，用于安放三相绕组。叠片结构降低涡流损耗，齿部引导主磁通穿过气隙，与永磁转子形成稳定转矩。',
+    explodedOffset:scaledOffset(-11.5, -0.8, 0),
+    labelPos:V3(-5.6, 3.8, 2.8),
+    build:buildStatorCore,
+  },
+  {
+    id:'windings', name:'定子绕组', nameEn:'Stator Windings',
+    material:'聚酰亚胺漆包铜线',
+    spec:'三相双层 / U·V·W 分布',
+    role:'建立旋转磁场 · 输出转矩',
+    color:'#ffc247',
+    description:'三相分布式绕组按 U、V、W 依次嵌入 24 个定子槽，槽内导体与两端部绕组构成完整线圈。通入三相对称电流后合成旋转磁场，与永磁体磁场相互作用，驱动转子同步旋转。',
+    explodedOffset:scaledOffset(-20.0, 8.0, 0),
+    labelPos:V3(-3.6, 4.9, 3.6),
+    build:buildStatorWindings,
+  },
+  {
+    id:'rotorCore', name:'转子铁芯', nameEn:'Rotor Core',
+    material:'低损耗硅钢片叠压',
+    spec:'φ76 × 84 mm / 4 极',
+    role:'永磁体基座 · 磁通回路',
+    color:'#8092a1',
+    description:'转子铁芯同样采用硅钢片叠压，作为磁通回路与永磁体的安装基座。外圆加工出精确的磁钢粘接面，中心与转轴过盈配合，把电磁转矩传递给负载，并承受高速旋转的离心力。',
+    explodedOffset:scaledOffset(11.5, -1.5, 0),
+    labelPos:V3(4.2, 2.8, -2.0),
+    build:buildRotorCore,
+  },
+  {
+    id:'magnets', name:'永磁体', nameEn:'Permanent Magnets',
+    material:'烧结钕铁硼 N42SH',
+    spec:'4 极表贴 / N 红 · S 蓝',
+    role:'建立气隙励磁磁场',
+    color:'#ff6574',
+    description:'四块表贴式永磁体沿转子圆周均布，N 极与 S 极交替排列，形成两对磁极。高矫顽力钕铁硼材料提供稳定气隙磁场，与定子旋转磁场极对数匹配，实现同步驱动，并具有较高功率密度。',
+    explodedOffset:scaledOffset(11.5, 6.6, 0),
+    labelPos:V3(4.6, 3.7, 2.5),
+    build:buildPermanentMagnets,
+  },
+  {
+    id:'shaft', name:'转轴', nameEn:'Shaft',
+    material:'40Cr 合金钢 · 精磨',
+    spec:'φ19 主颈 / 轴伸 φ12 × 78 mm',
+    role:'传递转矩 · 支撑旋转件',
+    color:'#d7e2e9',
+    description:'转轴贯穿转子与前后轴承，前端轴伸用于连接负载，表面键槽传递扭矩。阶梯轴径分别配合转子铁芯、轴承与密封件，经调质与精磨处理，保证高速运转时的刚度、同轴度与耐磨性。',
+    explodedOffset:scaledOffset(0, -11.8, 0),
+    labelPos:V3(1.0, 1.1, 13.9),
+    build:buildShaft,
+  },
+  {
+    id:'frontBearing', name:'前轴承', nameEn:'Front Bearing',
+    material:'GCr15 轴承钢',
+    spec:'深沟球 6204 / 10 粒钢球',
+    role:'前支撑 · 径向定位',
+    color:'#7ed9e8',
+    description:'前轴承采用深沟球结构，内圈随转轴旋转，外圈固定在端盖轴承座内。钢球在内外滚道之间滚动，将径向与轴向载荷传至机壳，同时以润滑脂降低摩擦，保证转子平稳高速运转。',
+    explodedOffset:scaledOffset(8.2, -7.2, 11.0),
+    labelPos:V3(2.6, 2.6, 5.9),
+    build:buildFrontBearing,
+  },
+  {
+    id:'rearBearing', name:'后轴承', nameEn:'Rear Bearing',
+    material:'GCr15 轴承钢',
+    spec:'深沟球 6204 / 10 粒钢球',
+    role:'后支撑 · 轴向辅助定位',
+    color:'#7ed9e8',
+    description:'后轴承位于尾端端盖内，深沟球结构承受转轴的径向载荷并辅助轴向定位。滚珠由保持架均匀分隔，使内圈、外圈之间的相对运动变为滚动摩擦，减少发热并维持转子自由旋转。',
+    explodedOffset:scaledOffset(-8.0, -7.2, -11.0),
+    labelPos:V3(-2.5, 2.6, -5.9),
+    build:buildRearBearing,
+  },
+  {
+    id:'terminalBox', name:'接线盒', nameEn:'Terminal Box',
+    material:'压铸铝盒体 · NBR 密封',
+    spec:'IP55 / U·V·W 三相引出',
+    role:'电气连接 · 相序标识',
+    color:'#8fb6c3',
+    description:'接线盒安装在机壳顶部，内部设有三相接线端子与绝缘隔板，外部盖板起防护和密封作用。U、V、W 三根引出线经电缆格兰导出，与外部驱动器连接，为定子绕组提供三相交流电。',
+    explodedOffset:scaledOffset(10.5, 10.5, -3.0),
+    labelPos:V3(1.9, 9.7, 0.0),
+    build:buildTerminalBox,
+  },
+  {
+    id:'airGap', name:'气隙', nameEn:'Air Gap',
+    material:'空气 / 约 1 mm 径向间隙',
+    spec:'δ ≈ 0.10 单位 / R4.10',
+    role:'主磁通耦合 · 隔离动静件',
+    color:'#69e6ff',
+    description:'气隙是定子内圆与转子磁钢外表面之间的薄层空气，厚度仅约 1 mm。它隔开静止与旋转部件，是主磁通跨越的路径；气隙过大会降低转矩，过小则可能引起扫膛与振动。',
+    explodedOffset:scaledOffset(16.0, -9.0, 0),
+    labelPos:V3(0.0, 4.25, -2.5),
+    build:buildAirGap,
+  },
+];
+
+/* ============================================================
+   03 · DOM、应用状态与通用工具
+   ============================================================ */
+const dom = {
+  sceneHost: document.getElementById('sceneHost'),
+  labelLayer: document.getElementById('labelLayer'),
+  leftRail: document.getElementById('leftRail'),
+  infoPanel: document.getElementById('infoPanel'),
+  mobilePartsBtn: document.getElementById('mobilePartsBtn'),
+  mobileInfoBtn: document.getElementById('mobileInfoBtn'),
+  infoCloseBtn: document.getElementById('infoCloseBtn'),
+  partList: document.getElementById('partList'),
+  partCount: document.getElementById('partCount'),
+  isolateBtn: document.getElementById('isolateBtn'),
+  showAllBtn: document.getElementById('showAllBtn'),
+  infoEmpty: document.getElementById('infoEmpty'),
+  partInfo: document.getElementById('partInfo'),
+  infoFileIndex: document.getElementById('infoFileIndex'),
+  infoNumber: document.getElementById('infoNumber'),
+  infoName: document.getElementById('infoName'),
+  infoNameEn: document.getElementById('infoNameEn'),
+  infoMaterial: document.getElementById('infoMaterial'),
+  infoSpec: document.getElementById('infoSpec'),
+  infoDescription: document.getElementById('infoDescription'),
+  infoRole: document.getElementById('infoRole'),
+  infoOffset: document.getElementById('infoOffset'),
+  spinBtn: document.getElementById('spinBtn'),
+  spinBtnText: document.getElementById('spinBtnText'),
+  rpmState: document.getElementById('rpmState'),
+  rpmValue: document.getElementById('rpmValue'),
+  speedRange: document.getElementById('speedRange'),
+  transparentBtn: document.getElementById('transparentBtn'),
+  sectionBtn: document.getElementById('sectionBtn'),
+  labelsBtn: document.getElementById('labelsBtn'),
+  helpBtn: document.getElementById('helpBtn'),
+  hints: document.getElementById('hints'),
+  explodeRange: document.getElementById('explodeRange'),
+  explodeValue: document.getElementById('explodeValue'),
+  explodeToggle: document.getElementById('explodeToggle'),
+  explodeBtnText: document.getElementById('explodeBtnText'),
+  toast: document.getElementById('toast'),
+  loader: document.getElementById('loader'),
+  loaderBar: document.getElementById('loaderBar'),
+  loaderStatus: document.getElementById('loaderStatus'),
+};
+
+const state = {
+  explodeTarget: 0,
+  explodeCurrent: 0,
+  selectionId: null,
+  hoveredId: null,
+  isolate: false,
+  transparent: false,
+  section: false,
+  labels: true,
+  hintsVisible: true,
+  spinning: true,
+  speedRpm: 36,
+  spinAngle: 0,
+  flowTime: 0,
+  hidden: new Set(),
+  cameraTween: null,
+  view: 'iso',
+  viewLocked: true,
+  toastTimer: 0,
+};
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const expDamp = (current, target, lambda, dt) => lerp(current, target, 1 - Math.exp(-lambda * dt));
+
+const partRecords = [];
+const partRecordById = new Map();
+const rotatingObjects = [];
+const windingFlows = [];
+const materialDisposalSet = new Set();
+const geometryDisposalSet = new Set();
+const textureDisposalSet = new Set();
+
+const assemblyRoot = new THREE.Group();
+assemblyRoot.name = 'PMSM-Assembly';
+
+function registerDisposableMaterial(material) {
+  if (!material) return material;
+  materialDisposalSet.add(material);
+  return material;
+}
+
+function trackGeometry(geometry) {
+  if (geometry) geometryDisposalSet.add(geometry);
+  return geometry;
+}
+
+function showToast(message) {
+  dom.toast.textContent = message;
+  dom.toast.classList.add('is-visible');
+  window.clearTimeout(state.toastTimer);
+  state.toastTimer = window.setTimeout(() => dom.toast.classList.remove('is-visible'), 2600);
+}
+
+function setRangeFill(input) {
+  const min = Number(input.min) || 0;
+  const max = Number(input.max) || 100;
+  const pct = clamp(((Number(input.value) - min) / (max - min)) * 100, 0, 100);
+  input.style.setProperty('--fill', pct.toFixed(2) + '%');
+}
+
+function describeOffset(offset) {
+  const ax = Math.abs(offset.x), ay = Math.abs(offset.y), az = Math.abs(offset.z);
+  const parts = [];
+  if (ax > 1) parts.push(offset.x > 0 ? '右移' : '左移');
+  if (ay > 1) parts.push(offset.y > 0 ? '上移' : '下移');
+  if (az > 1) parts.push(offset.z > 0 ? '前移' : '后移');
+  const distance = offset.length().toFixed(1);
+  return `${parts.join(' · ') || '原位'} / ${distance} cm`;
+}
+
+/* ============================================================
+   04 · 渲染器、相机、控制与环境
+   ============================================================ */
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: true,
+  powerPreference: 'high-performance',
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.03;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.localClippingEnabled = true;
+renderer.domElement.tabIndex = 0;
+dom.sceneHost.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.add(assemblyRoot);
+
+const CAMERA_BASE_FOV = 38;
+const CAMERA_EXPLODE_FOV = 54;
+const camera = new THREE.PerspectiveCamera(CAMERA_BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 240);
+const DEFAULT_CAMERA_POS = V3(35, 27, 42);
+const DEFAULT_CAMERA_TARGET = V3(0, 1.2, 0);
+camera.position.copy(DEFAULT_CAMERA_POS);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(DEFAULT_CAMERA_TARGET);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.rotateSpeed = 0.72;
+controls.zoomSpeed = 0.82;
+controls.panSpeed = 0.72;
+controls.screenSpacePanning = true;
+controls.minDistance = 16;
+controls.maxDistance = 118;
+controls.minPolarAngle = 0.13;
+controls.maxPolarAngle = Math.PI * 0.87;
+controls.mouseButtons = {
+  LEFT: THREE.MOUSE.ROTATE,
+  MIDDLE: THREE.MOUSE.DOLLY,
+  RIGHT: THREE.MOUSE.PAN,
+};
+controls.touches = {
+  ONE: THREE.TOUCH.ROTATE,
+  TWO: THREE.TOUCH.DOLLY_PAN,
+};
+controls.update();
+
+/* 后处理描边：选中高亮不再修改零件材质，避免丢失金属与磁钢细节。 */
+const composerTarget = new THREE.WebGLRenderTarget(1, 1, {
+  type: THREE.HalfFloatType,
+  samples: 4,
+});
+const composer = new EffectComposer(renderer, composerTarget);
+composer.setPixelRatio(renderer.getPixelRatio());
+composer.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+
+const outlinePass = new OutlinePass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  scene,
+  camera
+);
+outlinePass.edgeStrength = 5.3;
+outlinePass.edgeThickness = 2.3;
+outlinePass.edgeGlow = 0.42;
+outlinePass.pulsePeriod = 2.6;
+outlinePass.visibleEdgeColor.set(0x64e9ff);
+outlinePass.hiddenEdgeColor.set(0x2f8fa3);
+composer.addPass(outlinePass);
+
+const outputPass = new OutputPass();
+composer.addPass(outputPass);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.left = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+dom.labelLayer.appendChild(labelRenderer.domElement);
+
+const pmremGenerator = new THREE.PMREMGenerator(renderer);
+pmremGenerator.compileEquirectangularShader();
+const roomEnvironment = new RoomEnvironment();
+const environmentRT = pmremGenerator.fromScene(roomEnvironment, 0.035);
+scene.environment = environmentRT.texture;
+scene.environmentIntensity = 0.72;
+pmremGenerator.dispose();
+
+const hemiLight = new THREE.HemisphereLight(0xa8d6ee, 0x11171c, 1.15);
+scene.add(hemiLight);
+
+const keyLight = new THREE.DirectionalLight(0xfff4e4, 3.5);
+keyLight.position.set(22, 32, 20);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -29;
+keyLight.shadow.camera.right = 29;
+keyLight.shadow.camera.top = 29;
+keyLight.shadow.camera.bottom = -29;
+keyLight.shadow.camera.near = 1;
+keyLight.shadow.camera.far = 90;
+keyLight.shadow.bias = -0.00035;
+keyLight.shadow.normalBias = 0.035;
+keyLight.shadow.radius = 3;
+scene.add(keyLight);
+scene.add(keyLight.target);
+
+const fillLight = new THREE.DirectionalLight(0x71baff, 1.55);
+fillLight.position.set(-24, 11, 17);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0xf0b46a, 2.15);
+rimLight.position.set(-12, 8, -24);
+scene.add(rimLight);
+
+const topLight = new THREE.DirectionalLight(0xc9ebff, 1.3);
+topLight.position.set(2, 30, -10);
+scene.add(topLight);
+
+// 极淡的展示地台：只接收软阴影与一圈观测环，不遮挡深色渐变背景。
+const shadowFloor = new THREE.Mesh(
+  new THREE.PlaneGeometry(120, 120),
+  new THREE.ShadowMaterial({ color: 0x000000, opacity: 0.25 })
+);
+shadowFloor.rotation.x = -Math.PI / 2;
+shadowFloor.position.y = -15.35;
+shadowFloor.receiveShadow = true;
+shadowFloor.name = 'Shadow-Receiver';
+scene.add(shadowFloor);
+
+const floorRingGroup = new THREE.Group();
+[13.5, 22, 31].forEach((radius, index) => {
+  const ringGeo = trackGeometry(new THREE.RingGeometry(radius - 0.035, radius + 0.035, 160));
+  const ringMat = registerDisposableMaterial(new THREE.MeshBasicMaterial({
+    color: 0x78bbd4,
+    transparent: true,
+    opacity: 0.09 - index * 0.02,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  }));
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = -15.32;
+  floorRingGroup.add(ring);
+});
+scene.add(floorRingGroup);
+
+/* ============================================================
+   05 · 材质库
+   ============================================================ */
+function physicalMaterial(params) {
+  return registerDisposableMaterial(new THREE.MeshPhysicalMaterial(params));
+}
+
+function makeCanvasTexture(width, height, painter) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  painter(ctx, width, height);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  textureDisposalSet.add(texture);
+  return texture;
+}
+
+const nameplateTexture = makeCanvasTexture(768, 320, (ctx, w, h) => {
+  ctx.fillStyle = '#151c22';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(159,196,213,.28)';
+  ctx.lineWidth = 5;
+  ctx.strokeRect(16, 16, w - 32, h - 32);
+  ctx.fillStyle = '#7ee5ff';
+  ctx.font = '600 28px "Segoe UI", sans-serif';
+  ctx.letterSpacing = '0.16em';
+  ctx.fillText('QODER MOTION SYSTEMS', 56, 80);
+  ctx.fillStyle = '#e8f3f8';
+  ctx.font = '600 62px "Cascadia Code", "Consolas", monospace';
+  ctx.fillText('PMSM 24S / 4P', 54, 171);
+  ctx.fillStyle = '#8ea3af';
+  ctx.font = '26px "Segoe UI", sans-serif';
+  ctx.fillText('PERMANENT MAGNET SYNCHRONOUS MOTOR', 56, 220);
+  ctx.fillStyle = '#66dcff';
+  ctx.fillRect(56, 246, 170, 3);
+  ctx.fillStyle = '#657a86';
+  ctx.font = '22px "Cascadia Code", monospace';
+  ctx.fillText('T_e 12.5 N·m    n_N 3000 rpm    IP55', 56, 284);
+});
+
+const terminalPlateTexture = makeCanvasTexture(640, 256, (ctx, w, h) => {
+  ctx.fillStyle = '#0e151a';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(170,204,219,.25)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(12, 12, w - 24, h - 24);
+  ctx.fillStyle = '#9fb5c0';
+  ctx.font = '600 24px "Segoe UI", sans-serif';
+  ctx.fillText('THREE-PHASE TERMINAL', 38, 62);
+  ['U', 'V', 'W'].forEach((letter, index) => {
+    const x = 160 + index * 160;
+    ctx.beginPath();
+    ctx.arc(x, 142, 38, 0, Math.PI * 2);
+    ctx.fillStyle = ['#ffc247', '#48dba2', '#ff5f68'][index];
+    ctx.fill();
+    ctx.fillStyle = '#0b1013';
+    ctx.font = '700 40px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter, x, 144);
+  });
+});
+
+function makeMagnetLetterTexture(letter, color) {
+  return makeCanvasTexture(256, 256, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, 105, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(4,8,12,.72)';
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.fillStyle = '#f4fbff';
+    ctx.font = '700 122px "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter, w / 2, h / 2 + 8);
+    ctx.font = '600 18px "Cascadia Code", monospace';
+    ctx.fillStyle = color;
+    ctx.fillText(letter === 'N' ? 'NORTH' : 'SOUTH', w / 2, h - 32);
+  });
+}
+
+const MATS = {
+  housing: physicalMaterial({
+    color: 0x586671,
+    metalness: 0.9,
+    roughness: 0.32,
+    clearcoat: 0.18,
+    clearcoatRoughness: 0.28,
+    envMapIntensity: 0.98,
+    side: THREE.DoubleSide,
+  }),
+  housingInner: physicalMaterial({
+    color: 0x27323b,
+    metalness: 0.82,
+    roughness: 0.48,
+    side: THREE.BackSide,
+    envMapIntensity: 0.62,
+  }),
+  housingEdge: physicalMaterial({
+    color: 0x252f37,
+    metalness: 0.88,
+    roughness: 0.38,
+    envMapIntensity: 0.72,
+  }),
+  endCap: physicalMaterial({
+    color: 0x59646e,
+    metalness: 0.88,
+    roughness: 0.36,
+    clearcoat: 0.12,
+    clearcoatRoughness: 0.4,
+    envMapIntensity: 0.92,
+  }),
+  endCapDark: physicalMaterial({
+    color: 0x313b43,
+    metalness: 0.84,
+    roughness: 0.43,
+    envMapIntensity: 0.7,
+  }),
+  statorLamination: physicalMaterial({
+    color: 0x3f4a54,
+    metalness: 0.82,
+    roughness: 0.4,
+    anisotropy: 0.24,
+    anisotropyRotation: Math.PI / 2,
+    envMapIntensity: 0.72,
+  }),
+  statorEdge: physicalMaterial({
+    color: 0x222b32,
+    metalness: 0.8,
+    roughness: 0.45,
+    envMapIntensity: 0.58,
+  }),
+  rotorLamination: physicalMaterial({
+    color: 0x4b5660,
+    metalness: 0.83,
+    roughness: 0.37,
+    anisotropy: 0.18,
+    anisotropyRotation: Math.PI / 2,
+    envMapIntensity: 0.8,
+  }),
+  steel: physicalMaterial({
+    color: 0x9ba6af,
+    metalness: 0.95,
+    roughness: 0.25,
+    envMapIntensity: 1.08,
+  }),
+  steelDark: physicalMaterial({
+    color: 0x68737d,
+    metalness: 0.92,
+    roughness: 0.32,
+    envMapIntensity: 0.92,
+  }),
+  bearingRace: physicalMaterial({
+    color: 0xaab4bd,
+    metalness: 1.0,
+    roughness: 0.2,
+    clearcoat: 0.3,
+    clearcoatRoughness: 0.2,
+    envMapIntensity: 1.15,
+  }),
+  bearingInner: physicalMaterial({
+    color: 0xc0c9d0,
+    metalness: 1.0,
+    roughness: 0.18,
+    envMapIntensity: 1.2,
+  }),
+  bearingBall: physicalMaterial({
+    color: 0xd2dae0,
+    metalness: 1.0,
+    roughness: 0.1,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.08,
+    envMapIntensity: 1.35,
+  }),
+  shaft: physicalMaterial({
+    color: 0xb9c4cc,
+    metalness: 1.0,
+    roughness: 0.16,
+    clearcoat: 0.36,
+    clearcoatRoughness: 0.14,
+    envMapIntensity: 1.25,
+  }),
+  brass: physicalMaterial({
+    color: 0xc99a55,
+    metalness: 0.95,
+    roughness: 0.27,
+    envMapIntensity: 1.0,
+  }),
+  blackPlastic: physicalMaterial({
+    color: 0x10161b,
+    metalness: 0.12,
+    roughness: 0.52,
+    clearcoat: 0.22,
+    clearcoatRoughness: 0.5,
+    envMapIntensity: 0.65,
+  }),
+  terminalBody: physicalMaterial({
+    color: 0x394751,
+    metalness: 0.72,
+    roughness: 0.38,
+    clearcoat: 0.16,
+    clearcoatRoughness: 0.42,
+    envMapIntensity: 0.84,
+  }),
+  gasket: physicalMaterial({
+    color: 0x9b552c,
+    metalness: 0.05,
+    roughness: 0.68,
+    clearcoat: 0.05,
+    envMapIntensity: 0.5,
+  }),
+  magnetN: physicalMaterial({
+    color: 0xbf2738,
+    metalness: 0.34,
+    roughness: 0.27,
+    clearcoat: 0.56,
+    clearcoatRoughness: 0.26,
+    emissive: 0x5a0010,
+    emissiveIntensity: 0.28,
+    envMapIntensity: 1.0,
+  }),
+  magnetS: physicalMaterial({
+    color: 0x2663e8,
+    metalness: 0.34,
+    roughness: 0.27,
+    clearcoat: 0.56,
+    clearcoatRoughness: 0.26,
+    emissive: 0x001854,
+    emissiveIntensity: 0.28,
+    envMapIntensity: 1.0,
+  }),
+  magnetEdge: physicalMaterial({
+    color: 0x172028,
+    metalness: 0.5,
+    roughness: 0.4,
+    envMapIntensity: 0.7,
+  }),
+  plate: new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: nameplateTexture,
+    metalness: 0.42,
+    roughness: 0.43,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  }),
+  terminalPlate: new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    map: terminalPlateTexture,
+    metalness: 0.2,
+    roughness: 0.5,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+  }),
+  phase: PHASES.map(phase => physicalMaterial({
+    color: phase.color,
+    metalness: 0.58,
+    roughness: 0.26,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.23,
+    emissive: phase.glow,
+    emissiveIntensity: 0.035,
+    envMapIntensity: 1.0,
+  })),
+  phaseCable: PHASES.map(phase => physicalMaterial({
+    color: phase.color,
+    metalness: 0.08,
+    roughness: 0.48,
+    clearcoat: 0.24,
+    clearcoatRoughness: 0.4,
+    envMapIntensity: 0.65,
+  })),
+  airGap: registerDisposableMaterial(new THREE.MeshPhysicalMaterial({
+    color: 0x64e5ff,
+    metalness: 0.0,
+    roughness: 0.16,
+    transparent: true,
+    opacity: 0.105,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    emissive: 0x1189a8,
+    emissiveIntensity: 0.34,
+    blending: THREE.AdditiveBlending,
+  })),
+  airGapEdge: registerDisposableMaterial(new THREE.MeshBasicMaterial({
+    color: 0x84efff,
+    transparent: true,
+    opacity: 0.44,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })),
+  seam: registerDisposableMaterial(new THREE.MeshBasicMaterial({
+    color: 0x05090d,
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false,
+  })),
+  phaseLabel: PHASES.map((phase, index) => new THREE.MeshBasicMaterial({
+    map: makeMagnetLetterTexture(['U', 'V', 'W'][index], phase.css),
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  })),
+  magnetLabelN: new THREE.MeshBasicMaterial({
+    map: makeMagnetLetterTexture('N', '#ffd8dc'),
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  }),
+  magnetLabelS: new THREE.MeshBasicMaterial({
+    map: makeMagnetLetterTexture('S', '#c5d8ff'),
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -4,
+    polygonOffsetUnits: -4,
+  }),
+};
+Object.values(MATS.phaseLabel).forEach(m => registerDisposableMaterial(m));
+Object.values(MATS.magnetLabelN ? [MATS.magnetLabelN, MATS.magnetLabelS] : []).forEach(m => registerDisposableMaterial(m));
+[MATS.plate, MATS.terminalPlate].forEach(m => registerDisposableMaterial(m));
+
+/* ============================================================
+   06 · 几何工具与部件构建函数
+   ============================================================ */
+function makeAnnularShape(innerR, outerR, segments = 128) {
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+  const hole = new THREE.Path();
+  hole.absarc(0, 0, innerR, 0, Math.PI * 2, true);
+  shape.holes.push(hole);
+  return shape;
+}
+
+function makeRoundedRectShape(width, height, radius) {
+  const shape = new THREE.Shape();
+  const x = -width / 2;
+  const y = -height / 2;
+  const r = Math.min(radius, width * 0.5, height * 0.5);
+  shape.moveTo(x + r, y);
+  shape.lineTo(x + width - r, y);
+  shape.quadraticCurveTo(x + width, y, x + width, y + r);
+  shape.lineTo(x + width, y + height - r);
+  shape.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  shape.lineTo(x + r, y + height);
+  shape.quadraticCurveTo(x, y + height, x, y + height - r);
+  shape.lineTo(x, y + r);
+  shape.quadraticCurveTo(x, y, x + r, y);
+  return shape;
+}
+
+function extrudeZ(shape, depth, options = {}) {
+  const geometry = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: options.bevelEnabled ?? false,
+    bevelThickness: options.bevelThickness ?? 0.025,
+    bevelSize: options.bevelSize ?? 0.025,
+    bevelSegments: options.bevelSegments ?? 2,
+    curveSegments: options.curveSegments ?? 96,
+    steps: 1,
+  });
+  geometry.computeVertexNormals();
+  return trackGeometry(geometry);
+}
+
+function addHexBolt(parent, x, y, z, options = {}) {
+  const radius = options.radius ?? 0.16;
+  const height = options.height ?? 0.13;
+  const hex = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(radius, radius * 1.04, height, 6, 1, false)),
+    options.material ?? MATS.steelDark
+  );
+  hex.rotation.x = Math.PI / 2;
+  hex.position.set(x, y, z);
+  parent.add(hex);
+
+  const socket = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(radius * 0.46, radius * 0.46, height + 0.008, 6, 1, false)),
+    MATS.seam
+  );
+  socket.rotation.x = Math.PI / 2;
+  socket.position.set(x, y, z + (options.faceSign ?? 1) * (height * 0.5 + 0.002));
+  parent.add(socket);
+  return hex;
+}
+
+function makeCurvedTube(points, radius, radialSegments, tubularSegments, material) {
+  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.52);
+  const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
+  return new THREE.Mesh(geometry, material);
+}
+
+function orientDecalOnCylinder(mesh, angle, radius, z) {
+  const normal = V3(Math.cos(angle), Math.sin(angle), 0);
+  const up = V3(0, 0, 1);
+  const right = new THREE.Vector3().crossVectors(up, normal).normalize();
+  const basis = new THREE.Matrix4().makeBasis(right, up, normal);
+  mesh.quaternion.setFromRotationMatrix(basis);
+  mesh.position.copy(normal).multiplyScalar(radius);
+  mesh.position.z = z;
+}
+
+function buildHousing() {
+  const group = new THREE.Group();
+  group.name = 'Housing';
+
+  const outerR = PARAMS.housingOuterR;
+  const innerR = 6.56;
+  const len = PARAMS.housingLength;
+
+  const shell = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(outerR, outerR, len, 96, 1, true)),
+    MATS.housing
+  );
+  shell.rotation.x = Math.PI / 2;
+  shell.userData.isShell = true;
+  group.add(shell);
+
+  const liner = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(innerR, innerR, len - 0.08, 96, 1, true)),
+    MATS.housingInner
+  );
+  liner.rotation.x = Math.PI / 2;
+  liner.userData.isShell = true;
+  group.add(liner);
+
+  const rimShape = makeAnnularShape(innerR, outerR, 96);
+  const rimGeo = extrudeZ(rimShape, 0.14, { bevelEnabled: true, bevelThickness: 0.018, bevelSize: 0.018 });
+  [-1, 1].forEach(sign => {
+    const rim = new THREE.Mesh(rimGeo, MATS.housingEdge);
+    rim.position.z = sign > 0 ? len / 2 - 0.14 : -len / 2;
+    rim.userData.isShell = true;
+    group.add(rim);
+  });
+
+  // 外壁三道窄筋，压住叠片并加强机壳圆度。
+  [-4.4, 0, 4.4].forEach(z => {
+    const band = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(outerR + 0.006, 0.072, 8, 120)),
+      MATS.housingEdge
+    );
+    band.position.z = z;
+    band.userData.isShell = true;
+    group.add(band);
+  });
+
+  // 径向外散热筋：轴向挤压的薄梯形截面，用 InstancedMesh 减少绘制调用。
+  const finShape = new THREE.Shape();
+  finShape.moveTo(-0.10, 0);
+  finShape.lineTo(0.10, 0);
+  finShape.lineTo(0.058, 0.62);
+  finShape.quadraticCurveTo(0, 0.70, -0.058, 0.62);
+  finShape.lineTo(-0.10, 0);
+  const finDepth = len - 1.0;
+  const finGeo = extrudeZ(finShape, finDepth, {
+    bevelEnabled: true,
+    bevelThickness: 0.012,
+    bevelSize: 0.012,
+    bevelSegments: 1,
+  });
+
+  const finAngles = [];
+  const top = Math.PI / 2;
+  const bottom = -Math.PI / 2;
+  for (let i = 0; i < PARAMS.finCount; i += 1) {
+    const a = (i / PARAMS.finCount) * Math.PI * 2;
+    const dTop = Math.abs(Math.atan2(Math.sin(a - top), Math.cos(a - top))) / DEG;
+    const dBottom = Math.abs(Math.atan2(Math.sin(a - bottom), Math.cos(a - bottom))) / DEG;
+    if (dTop < PARAMS.finGapTopDeg || dBottom < PARAMS.finGapBottomDeg) continue;
+    finAngles.push(a);
+  }
+  const fins = new THREE.InstancedMesh(finGeo, MATS.housing, finAngles.length);
+  const dummy = new THREE.Object3D();
+  finAngles.forEach((a, index) => {
+    dummy.position.set(Math.cos(a) * (outerR - 0.012), Math.sin(a) * (outerR - 0.012), -finDepth / 2);
+    dummy.rotation.set(0, 0, a - Math.PI / 2);
+    dummy.updateMatrix();
+    fins.setMatrixAt(index, dummy.matrix);
+  });
+  fins.instanceMatrix.needsUpdate = true;
+  fins.userData.isShell = true;
+  group.add(fins);
+
+  // 接线盒安装平台
+  const terminalPad = new THREE.Mesh(
+    new RoundedBoxGeometry(3.9, 0.16, 3.35, 3, 0.045),
+    MATS.housingEdge
+  );
+  terminalPad.position.set(0, outerR + 0.035, 0);
+  terminalPad.userData.isShell = true;
+  group.add(terminalPad);
+
+  // 左右安装底脚：带托板、支撑座与沉头安装孔。
+  [-1, 1].forEach(side => {
+    const footX = side * 4.82;
+    const pad = new THREE.Mesh(
+      new RoundedBoxGeometry(2.5, 0.58, 9.0, 3, 0.1),
+      MATS.housingEdge
+    );
+    pad.position.set(footX, -7.92, 0);
+    group.add(pad);
+
+    const support = new THREE.Mesh(
+      new RoundedBoxGeometry(1.25, 2.45, 7.2, 3, 0.1),
+      MATS.housing
+    );
+    support.position.set(footX, -6.42, 0);
+    support.rotation.z = side * 0.055;
+    group.add(support);
+
+    const gusset = new THREE.Mesh(
+      new RoundedBoxGeometry(0.5, 1.3, 2.4, 2, 0.06),
+      MATS.housingEdge
+    );
+    gusset.position.set(footX - side * 0.42, -6.65, 2.9);
+    group.add(gusset);
+    const gussetRear = gusset.clone();
+    gussetRear.position.z = -2.9;
+    group.add(gussetRear);
+
+    [-2.95, 2.95].forEach(z => {
+      const hole = new THREE.Mesh(
+        trackGeometry(new THREE.CylinderGeometry(0.31, 0.31, 0.03, 24)),
+        MATS.seam
+      );
+      hole.position.set(footX, -7.62, z);
+      group.add(hole);
+      const rim = new THREE.Mesh(
+        trackGeometry(new THREE.TorusGeometry(0.36, 0.04, 8, 32)),
+        MATS.steelDark
+      );
+      rim.rotation.x = Math.PI / 2;
+      rim.position.set(footX, -7.605, z);
+      group.add(rim);
+    });
+  });
+
+  // 侧面小铭牌
+  const plateAngle = -64 * DEG;
+  const plateBack = new THREE.Mesh(
+    new RoundedBoxGeometry(0.16, 1.18, 2.85, 3, 0.05),
+    MATS.blackPlastic
+  );
+  const normal = V3(Math.cos(plateAngle), Math.sin(plateAngle), 0);
+  const right = new THREE.Vector3().crossVectors(V3(0, 0, 1), normal).normalize();
+  const plateBasis = new THREE.Matrix4().makeBasis(normal, V3(0, 0, 1), right);
+  plateBack.quaternion.setFromRotationMatrix(plateBasis);
+  plateBack.position.copy(normal).multiplyScalar(outerR + 0.02);
+  plateBack.position.z = 2.4;
+  group.add(plateBack);
+
+  const plate = new THREE.Mesh(trackGeometry(new THREE.PlaneGeometry(2.68, 1.05)), MATS.plate);
+  plate.quaternion.copy(plateBack.quaternion);
+  // 平面默认法线 +Z，绕圆柱法线转回铭牌正面。
+  plate.rotateY(Math.PI / 2);
+  plate.position.copy(normal).multiplyScalar(outerR + 0.115);
+  plate.position.z = 2.4;
+  plate.userData.noShadow = true;
+  group.add(plate);
+
+  return group;
+}
+
+function buildEndCap(sign, isFront) {
+  const group = new THREE.Group();
+  group.name = isFront ? 'FrontEndCap' : 'RearEndCap';
+
+  const outerR = PARAMS.capRadius;
+  const centerZ = sign * PARAMS.capZ;
+  const innerFace = centerZ - sign * 0.55;
+  const outerFace = centerZ + sign * 0.55;
+
+  const mainGeo = extrudeZ(makeAnnularShape(2.38, outerR, 112), 1.1, {
+    bevelEnabled: true,
+    bevelThickness: 0.05,
+    bevelSize: 0.05,
+    bevelSegments: 2,
+  });
+  mainGeo.translate(0, 0, sign > 0 ? centerZ - 0.55 : centerZ - 0.55);
+  const main = new THREE.Mesh(mainGeo, MATS.endCap);
+  main.userData.isShell = true;
+  group.add(main);
+
+  const lipGeo = extrudeZ(makeAnnularShape(6.1, outerR + 0.06, 112), 0.17, {
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.02,
+    bevelSegments: 1,
+  });
+  const lip = new THREE.Mesh(lipGeo, MATS.endCapDark);
+  lip.position.z = sign > 0 ? outerFace : outerFace - 0.17;
+  lip.userData.isShell = true;
+  group.add(lip);
+
+  const bossGeo = extrudeZ(makeAnnularShape(2.38, 3.24, 96), 0.46, {
+    bevelEnabled: true,
+    bevelThickness: 0.035,
+    bevelSize: 0.035,
+    bevelSegments: 2,
+  });
+  const boss = new THREE.Mesh(bossGeo, MATS.endCap);
+  boss.position.z = sign > 0 ? outerFace - 0.02 : outerFace - 0.44;
+  boss.userData.isShell = true;
+  group.add(boss);
+
+  const bossRing = new THREE.Mesh(
+    trackGeometry(new THREE.TorusGeometry(3.14, 0.055, 8, 80)),
+    MATS.steelDark
+  );
+  bossRing.position.z = sign > 0 ? outerFace + 0.44 : outerFace - 0.44;
+  group.add(bossRing);
+
+  const sealRing = new THREE.Mesh(
+    trackGeometry(new THREE.TorusGeometry(2.3, 0.055, 8, 72)),
+    MATS.blackPlastic
+  );
+  sealRing.position.z = sign > 0 ? outerFace + 0.44 : outerFace - 0.44;
+  group.add(sealRing);
+
+  // 四条铸造加强筋只落在端盖外表面，避免穿入旋转件。
+  for (let i = 0; i < 4; i += 1) {
+    const a = Math.PI / 4 + i * Math.PI / 2;
+    const rib = new THREE.Mesh(
+      new RoundedBoxGeometry(2.35, 0.16, 0.46, 2, 0.05),
+      MATS.endCap
+    );
+    rib.position.set(Math.cos(a) * 4.6, Math.sin(a) * 4.6, sign > 0 ? outerFace + 0.015 : outerFace - 0.175);
+    rib.rotation.z = a;
+    rib.userData.isShell = true;
+    group.add(rib);
+  }
+
+  // 8 颗外圈螺栓
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2 - Math.PI / 8;
+    const x = Math.cos(a) * 5.58;
+    const y = Math.sin(a) * 5.58;
+    const z = sign > 0 ? outerFace + 0.075 : outerFace - 0.075;
+    addHexBolt(group, x, y, z, {
+      radius: 0.18,
+      height: 0.15,
+      faceSign: sign,
+      material: MATS.steelDark,
+    });
+  }
+
+  // 前端盖附产品铭牌
+  if (isFront) {
+    const backing = new THREE.Mesh(
+      new RoundedBoxGeometry(2.2, 0.95, 0.08, 3, 0.025),
+      MATS.blackPlastic
+    );
+    backing.position.set(-0.1, -3.75, outerFace + 0.03);
+    group.add(backing);
+    const plate = new THREE.Mesh(trackGeometry(new THREE.PlaneGeometry(2.03, 0.84)), MATS.plate);
+    plate.position.set(-0.1, -3.75, outerFace + 0.074);
+    plate.userData.noShadow = true;
+    group.add(plate);
+  }
+
+  // 中心孔内侧的轴承座止口
+  const seat = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(3.06, 3.06, 0.28, 64, 1, true)),
+    MATS.endCapDark
+  );
+  seat.rotation.x = Math.PI / 2;
+  seat.position.z = sign > 0 ? innerFace + 0.1 : innerFace - 0.1;
+  group.add(seat);
+
+  return group;
+}
+
+function buildFrontEndCap() {
+  return buildEndCap(1, true);
+}
+
+function buildRearEndCap() {
+  return buildEndCap(-1, false);
+}
+
+function makeAnnularSectorShape(innerR, outerR, startAngle, endAngle) {
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, outerR, startAngle, endAngle, false);
+  shape.absarc(0, 0, innerR, endAngle, startAngle, true);
+  shape.closePath();
+  return shape;
+}
+
+/* ---------- 定子冲片：24 槽半闭口槽形 ---------- */
+function createStatorSlotHolePath() {
+  const slotCount = PARAMS.slotCount;
+  const pitch = (Math.PI * 2) / slotCount;
+  const open = PARAMS.slotOpenHalfDeg * DEG;
+  const shoulder = PARAMS.slotShoulderHalfDeg * DEG;
+  const bottom = PARAMS.slotBottomHalfDeg * DEG;
+  const rBore = PARAMS.statorBoreR;
+  const rShoulder = PARAMS.slotShoulderR;
+  const rBottom = PARAMS.slotBottomR;
+  const path = new THREE.Path();
+  let started = false;
+
+  const pushPoint = (angle, radius) => {
+    const x = Math.cos(angle) * radius;
+    const y = Math.sin(angle) * radius;
+    if (!started) {
+      path.moveTo(x, y);
+      started = true;
+    } else {
+      path.lineTo(x, y);
+    }
+  };
+
+  for (let i = 0; i < slotCount; i += 1) {
+    const center = i * pitch;
+    // 由槽口左缘进入槽腔，经圆角槽底后从右缘返回内圆。
+    pushPoint(center - open, rBore);
+    pushPoint(center - shoulder, rShoulder);
+    pushPoint(center - bottom, rBottom);
+    pushPoint(center - bottom * 0.62, rBottom + 0.042);
+    pushPoint(center - bottom * 0.22, rBottom + 0.058);
+    pushPoint(center + bottom * 0.22, rBottom + 0.058);
+    pushPoint(center + bottom * 0.62, rBottom + 0.042);
+    pushPoint(center + bottom, rBottom);
+    pushPoint(center + shoulder, rShoulder);
+    pushPoint(center + open, rBore);
+    // 齿顶内圆弧，连接至下一槽口
+    for (let k = 1; k <= 4; k += 1) {
+      const a = center + open + (pitch - open * 2) * (k / 5);
+      pushPoint(a, rBore);
+    }
+  }
+  path.closePath();
+  return path;
+}
+
+function buildStatorCore() {
+  const group = new THREE.Group();
+  group.name = 'StatorCore';
+
+  const shape = new THREE.Shape();
+  shape.absarc(0, 0, PARAMS.statorOuterR, 0, Math.PI * 2, false);
+  shape.holes.push(createStatorSlotHolePath());
+
+  const count = PARAMS.laminationCount;
+  const gap = PARAMS.laminationGap;
+  const sliceT = (PARAMS.coreLength - gap * (count - 1)) / count;
+  const sheetGeo = extrudeZ(shape, sliceT, {
+    bevelEnabled: false,
+    curveSegments: 96,
+  });
+
+  const sheets = new THREE.InstancedMesh(sheetGeo, MATS.statorLamination, count);
+  const dummy = new THREE.Object3D();
+  const firstZ = -PARAMS.coreLength / 2;
+  for (let i = 0; i < count; i += 1) {
+    dummy.position.set(0, 0, firstZ + i * (sliceT + gap));
+    dummy.rotation.set(0, 0, 0);
+    dummy.updateMatrix();
+    sheets.setMatrixAt(i, dummy.matrix);
+  }
+  sheets.instanceMatrix.needsUpdate = true;
+  group.add(sheets);
+
+  // 端部压圈
+  const clampRingGeo = extrudeZ(makeAnnularShape(5.42, PARAMS.statorOuterR + 0.012, 112), 0.13, {
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.018,
+    bevelSegments: 1,
+  });
+  [-1, 1].forEach(sign => {
+    const ring = new THREE.Mesh(clampRingGeo, MATS.statorEdge);
+    ring.position.z = sign > 0 ? PARAMS.coreLength / 2 - 0.08 : -PARAMS.coreLength / 2 - 0.05;
+    group.add(ring);
+  });
+
+  // 外圆扣片
+  for (let i = 0; i < 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
+    const clip = new THREE.Mesh(
+      new RoundedBoxGeometry(0.16, 0.075, PARAMS.coreLength - 0.2, 2, 0.025),
+      MATS.statorEdge
+    );
+    clip.position.set(
+      Math.cos(a) * (PARAMS.statorOuterR + 0.02),
+      Math.sin(a) * (PARAMS.statorOuterR + 0.02),
+      0
+    );
+    clip.rotation.z = a - Math.PI / 2;
+    group.add(clip);
+  }
+
+  const phasePattern = [0, 2, 1, 0, 2, 1];
+  for (let i = 0; i < PARAMS.slotCount; i += 1) {
+    const phase = phasePattern[Math.floor(i / 2) % phasePattern.length];
+    const a = i * (Math.PI * 2 / PARAMS.slotCount);
+    const marker = new THREE.Mesh(
+      trackGeometry(new THREE.PlaneGeometry(0.24, 0.18)),
+      MATS.phaseLabel[phase]
+    );
+    marker.userData.noShadow = true;
+    orientDecalOnCylinder(marker, a, PARAMS.slotBottomR + 0.065, PARAMS.coreLength / 2 + 0.14);
+    const holder = new THREE.Group();
+    holder.rotation.x = Math.PI / 2;
+    holder.add(marker);
+    marker.position.set(0, 0, 0);
+    marker.quaternion.identity();
+    // 槽号色标贴在内孔齿顶前方，仅作相序提示，不参与槽形。
+    holder.position.set(Math.cos(a) * 4.18, Math.sin(a) * 4.18, PARAMS.coreLength / 2 + 0.145);
+    holder.rotation.z = a;
+    group.add(holder);
+  }
+
+  return group;
+}
+
+function buildStatorWindings() {
+  const group = new THREE.Group();
+  group.name = 'StatorWindings';
+
+  const slotCount = PARAMS.slotCount;
+  const pitch = (Math.PI * 2) / slotCount;
+  const phasePattern = [0, 2, 1, 0, 2, 1];
+  const phaseBySlot = [];
+  for (let i = 0; i < slotCount; i += 1) {
+    phaseBySlot.push(phasePattern[Math.floor(i / 2) % phasePattern.length]);
+  }
+
+  const barShape = makeRoundedRectShape(0.25, 0.8, 0.075);
+  const barDepth = 9.4;
+  const barGeo = extrudeZ(barShape, barDepth, {
+    bevelEnabled: true,
+    bevelThickness: 0.024,
+    bevelSize: 0.024,
+    bevelSegments: 2,
+    curveSegments: 10,
+  });
+  barGeo.translate(0, 0, -barDepth / 2);
+
+  const slotMaterials = [];
+  for (let i = 0; i < slotCount; i += 1) {
+    const phaseIndex = phaseBySlot[i];
+    const slotMat = MATS.phase[phaseIndex].clone();
+    slotMat.emissiveIntensity = 0.035;
+    registerDisposableMaterial(slotMat);
+    slotMaterials.push(slotMat);
+
+    const slotGroup = new THREE.Group();
+    slotGroup.rotation.z = i * pitch - Math.PI / 2;
+    [-0.16, 0.16].forEach(offset => {
+      const bar = new THREE.Mesh(barGeo, slotMat);
+      bar.position.set(offset, 4.94, 0);
+      slotGroup.add(bar);
+    });
+    group.add(slotGroup);
+
+    windingFlows.push({
+      material: slotMat,
+      phase: phaseIndex,
+      offset: i / slotCount,
+      strength: 1.0,
+    });
+  }
+
+  // 前端 U 形跨接线，连接同相双槽（每两个槽组成一个相带）。
+  for (let pair = 0; pair < slotCount / 2; pair += 1) {
+    const slotA = pair * 2;
+    const slotB = slotA + 1;
+    const phaseIndex = phaseBySlot[slotA];
+    const angleA = slotA * pitch;
+    const angleB = slotB * pitch;
+    const mid = (angleA + angleB) / 2;
+    const zBase = 4.68;
+    const points = [
+      V3(Math.cos(angleA) * 4.93, Math.sin(angleA) * 4.93, zBase),
+      V3(Math.cos(angleA + pitch * 0.17) * 5.0, Math.sin(angleA + pitch * 0.17) * 5.0, 5.09),
+      V3(Math.cos(mid) * 5.18, Math.sin(mid) * 5.18, 5.34),
+      V3(Math.cos(angleB - pitch * 0.17) * 5.0, Math.sin(angleB - pitch * 0.17) * 5.0, 5.09),
+      V3(Math.cos(angleB) * 4.93, Math.sin(angleB) * 4.93, zBase),
+    ];
+    const loopMat = MATS.phase[phaseIndex].clone();
+    loopMat.emissiveIntensity = 0.03;
+    registerDisposableMaterial(loopMat);
+    const loop = makeCurvedTube(points, 0.145, 8, 36, loopMat);
+    group.add(loop);
+    windingFlows.push({
+      material: loopMat,
+      phase: phaseIndex,
+      offset: (pair + 0.5) / (slotCount / 2),
+      strength: 0.8,
+    });
+  }
+
+  // 后端三相分段端环：三种半径错层排布，形成清晰的相序识别。
+  PHASES.forEach((phase, phaseIndex) => {
+    const ringMat = MATS.phase[phaseIndex].clone();
+    ringMat.emissiveIntensity = 0.04;
+    registerDisposableMaterial(ringMat);
+    const radius = 4.62 + phaseIndex * 0.3;
+    const arc = Math.PI * 1.66;
+    const ring = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(radius, 0.135, 10, 92, arc)),
+      ringMat
+    );
+    ring.position.z = -5.13 - phaseIndex * 0.025;
+    ring.rotation.z = phaseIndex * (Math.PI * 2 / 3) + 0.25;
+    group.add(ring);
+    windingFlows.push({
+      material: ringMat,
+      phase: phaseIndex,
+      offset: phaseIndex / 3,
+      strength: 0.72,
+    });
+  });
+
+  // 端部绑扎环（非导电绑带）
+  [-1, 1].forEach(sign => {
+    const lacing = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(5.28, 0.045, 6, 96)),
+      MATS.blackPlastic
+    );
+    lacing.position.z = sign * 5.01;
+    group.add(lacing);
+  });
+
+  return group;
+}
+
+function buildRotorCore() {
+  const group = new THREE.Group();
+  group.name = 'RotorCore';
+
+  const count = 16;
+  const gap = 0.055;
+  const totalLength = 8.4;
+  const sliceT = (totalLength - gap * (count - 1)) / count;
+  const sliceGeo = trackGeometry(new THREE.CylinderGeometry(PARAMS.rotorR, PARAMS.rotorR, sliceT, 72, 1, false));
+  sliceGeo.rotateX(Math.PI / 2);
+  const slices = new THREE.InstancedMesh(sliceGeo, MATS.rotorLamination, count);
+  const dummy = new THREE.Object3D();
+  const firstZ = -totalLength / 2;
+  for (let i = 0; i < count; i += 1) {
+    dummy.position.set(0, 0, firstZ + i * (sliceT + gap));
+    dummy.updateMatrix();
+    slices.setMatrixAt(i, dummy.matrix);
+  }
+  slices.instanceMatrix.needsUpdate = true;
+  group.add(slices);
+
+  [-1, 1].forEach(sign => {
+    const plate = new THREE.Mesh(
+      trackGeometry(new THREE.CylinderGeometry(3.91, 3.91, 0.17, 72)),
+      MATS.steelDark
+    );
+    plate.rotation.x = Math.PI / 2;
+    plate.position.z = sign * (totalLength / 2 + 0.02);
+    group.add(plate);
+
+    const endRing = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(3.87, 0.06, 8, 80)),
+      MATS.steel
+    );
+    endRing.position.z = sign * (totalLength / 2 + 0.11);
+    group.add(endRing);
+  });
+
+  // 磁极之间的非磁性填充楔，明确磁钢安装基准。
+  const poleCount = PARAMS.polePairs * 2;
+  const polePitch = (Math.PI * 2) / poleCount;
+  const wedgeHalf = polePitch / 12;
+  const wedgeShape = makeAnnularSectorShape(3.53, 3.8, -wedgeHalf, wedgeHalf);
+  const wedgeGeo = extrudeZ(wedgeShape, PARAMS.magnetLength - 0.1, {
+    bevelEnabled: true,
+    bevelThickness: 0.015,
+    bevelSize: 0.015,
+    bevelSegments: 1,
+    curveSegments: 8,
+  });
+  wedgeGeo.translate(0, 0, -(PARAMS.magnetLength - 0.1) / 2);
+  for (let i = 0; i < poleCount; i += 1) {
+    const wedge = new THREE.Mesh(wedgeGeo, MATS.magnetEdge);
+    wedge.rotation.z = polePitch / 2 + i * polePitch;
+    group.add(wedge);
+  }
+
+  rotatingObjects.push(group);
+  return group;
+}
+
+function buildPermanentMagnets() {
+  const group = new THREE.Group();
+  group.name = 'PermanentMagnets';
+
+  const poleCount = PARAMS.polePairs * 2;
+  const polePitch = (Math.PI * 2) / poleCount;
+  // 极数增加时自动收紧磁钢弧长，避免相邻磁极相互穿插。
+  const arc = Math.min(PARAMS.magnetArcDeg * DEG, polePitch * 0.88);
+  const innerR = PARAMS.rotorR + 0.006;
+  const outerR = PARAMS.rotorR + PARAMS.magnetThickness;
+  const magnetShape = makeAnnularSectorShape(innerR, outerR, -arc / 2, arc / 2);
+  const geo = extrudeZ(magnetShape, PARAMS.magnetLength, {
+    bevelEnabled: true,
+    bevelThickness: 0.035,
+    bevelSize: 0.028,
+    bevelSegments: 2,
+    curveSegments: 72,
+  });
+  geo.translate(0, 0, -PARAMS.magnetLength / 2);
+
+  for (let i = 0; i < poleCount; i += 1) {
+    const angle = i * polePitch;
+    const isNorth = i % 2 === 0;
+    const magnet = new THREE.Mesh(geo, isNorth ? MATS.magnetN : MATS.magnetS);
+    magnet.rotation.z = angle;
+    group.add(magnet);
+
+    const decal = new THREE.Mesh(
+      trackGeometry(new THREE.PlaneGeometry(0.82, 0.82)),
+      isNorth ? MATS.magnetLabelN : MATS.magnetLabelS
+    );
+    decal.userData.noShadow = true;
+    orientDecalOnCylinder(decal, angle, outerR + 0.012, 0.0);
+    group.add(decal);
+  }
+
+  // 磁钢端部压紧环
+  const clampGeo = extrudeZ(makeAnnularShape(3.78, outerR + 0.035, 96), 0.15, {
+    bevelEnabled: true,
+    bevelThickness: 0.018,
+    bevelSize: 0.018,
+    bevelSegments: 1,
+  });
+  [-1, 1].forEach(sign => {
+    const clamp = new THREE.Mesh(clampGeo, MATS.steelDark);
+    clamp.position.z = sign > 0
+      ? PARAMS.magnetLength / 2 + 0.01
+      : -PARAMS.magnetLength / 2 - 0.16;
+    group.add(clamp);
+  });
+
+  rotatingObjects.push(group);
+  return group;
+}
+
+function buildShaft() {
+  const group = new THREE.Group();
+  group.name = 'Shaft';
+
+  // 阶梯轴母线：由尾端到前端一次车削而成。
+  const profile = [
+    [0.00, -8.00],
+    [0.44, -8.00],
+    [0.44, -7.72],
+    [0.62, -7.56],
+    [0.66, -6.15],
+    [0.88, -6.00],
+    [0.985, -5.68],
+    [0.985, 5.38],
+    [0.88, 5.62],
+    [0.84, 5.95],
+    [0.66, 6.18],
+    [0.585, 6.55],
+    [0.585, 12.72],
+    [0.55, 13.26],
+    [0.43, 13.58],
+    [0.42, 13.74],
+    [0.00, 13.80],
+  ].map(([r, z]) => new THREE.Vector2(r, z));
+  const shaftGeo = trackGeometry(new THREE.LatheGeometry(profile, 64));
+  shaftGeo.rotateX(Math.PI / 2);
+  const shaft = new THREE.Mesh(shaftGeo, MATS.shaft);
+  group.add(shaft);
+
+  // 前端键槽与平键
+  const keySlot = new THREE.Mesh(
+    trackGeometry(new THREE.BoxGeometry(0.26, 0.055, 2.8)),
+    MATS.blackPlastic
+  );
+  keySlot.position.set(0, 0.57, 10.7);
+  group.add(keySlot);
+  const key = new THREE.Mesh(
+    new RoundedBoxGeometry(0.22, 0.14, 2.32, 2, 0.03),
+    MATS.brass
+  );
+  key.position.set(0, 0.625, 10.7);
+  group.add(key);
+
+  // 轴承锁紧环
+  [-1, 1].forEach(sign => {
+    const ring = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(0.9, 0.045, 7, 48)),
+      MATS.steelDark
+    );
+    ring.position.z = sign * 6.02;
+    group.add(ring);
+  });
+
+  const frontMark = new THREE.Mesh(
+    trackGeometry(new THREE.CircleGeometry(0.16, 24)),
+    MATS.seam
+  );
+  frontMark.position.z = 13.804;
+  group.add(frontMark);
+
+  const frontMarkRing = new THREE.Mesh(
+    trackGeometry(new THREE.TorusGeometry(0.18, 0.022, 6, 32)),
+    MATS.steelDark
+  );
+  frontMarkRing.position.z = 13.81;
+  group.add(frontMarkRing);
+
+  rotatingObjects.push(group);
+  return group;
+}
+
+function buildBearingAt(zCenter) {
+  const group = new THREE.Group();
+  group.name = zCenter > 0 ? 'FrontBearing' : 'RearBearing';
+
+  const width = 0.96;
+  const outerRaceGeo = extrudeZ(makeAnnularShape(2.01, 2.37, 80), width, {
+    bevelEnabled: true,
+    bevelThickness: 0.03,
+    bevelSize: 0.03,
+    bevelSegments: 2,
+  });
+  const outerRace = new THREE.Mesh(outerRaceGeo, MATS.bearingRace);
+  outerRace.position.z = zCenter - width / 2;
+  group.add(outerRace);
+
+  const outerGroove = new THREE.Mesh(
+    trackGeometry(new THREE.TorusGeometry(2.378, 0.028, 6, 64)),
+    MATS.blackPlastic
+  );
+  outerGroove.position.z = zCenter;
+  group.add(outerGroove);
+
+  const spinGroup = new THREE.Group();
+  spinGroup.name = 'BearingSpinAssembly';
+
+  const innerRaceGeo = extrudeZ(makeAnnularShape(1.0, 1.49, 72), width, {
+    bevelEnabled: true,
+    bevelThickness: 0.028,
+    bevelSize: 0.028,
+    bevelSegments: 2,
+  });
+  const innerRace = new THREE.Mesh(innerRaceGeo, MATS.bearingInner);
+  innerRace.position.z = zCenter - width / 2;
+  spinGroup.add(innerRace);
+
+  const ballGeo = trackGeometry(new THREE.SphereGeometry(0.285, 18, 14));
+  for (let i = 0; i < PARAMS.bearingBallCount; i += 1) {
+    const a = (i / PARAMS.bearingBallCount) * Math.PI * 2;
+    const ball = new THREE.Mesh(ballGeo, MATS.bearingBall);
+    ball.position.set(Math.cos(a) * 1.755, Math.sin(a) * 1.755, zCenter);
+    spinGroup.add(ball);
+  }
+
+  [-0.3, 0.3].forEach(zOffset => {
+    const cage = new THREE.Mesh(
+      trackGeometry(new THREE.TorusGeometry(1.755, 0.026, 5, 64)),
+      MATS.brass
+    );
+    cage.position.z = zCenter + zOffset;
+    spinGroup.add(cage);
+  });
+
+  const marker = new THREE.Mesh(
+    trackGeometry(new THREE.SphereGeometry(0.045, 8, 6)),
+    MATS.brass
+  );
+  marker.position.set(1.25, 0, zCenter + width / 2 + 0.01);
+  spinGroup.add(marker);
+
+  group.add(spinGroup);
+  rotatingObjects.push(spinGroup);
+  return group;
+}
+
+function buildFrontBearing() {
+  return buildBearingAt(PARAMS.bearingZ);
+}
+
+function buildRearBearing() {
+  return buildBearingAt(-PARAMS.bearingZ);
+}
+
+function buildTerminalBox() {
+  const group = new THREE.Group();
+  group.name = 'TerminalBox';
+
+  const baseY = PARAMS.housingOuterR + 0.16;
+  const bodyY = PARAMS.terminalLocalY;
+
+  const base = new THREE.Mesh(
+    new RoundedBoxGeometry(3.95, 0.12, 3.45, 3, 0.045),
+    MATS.gasket
+  );
+  base.position.set(0, baseY - 0.005, 0);
+  group.add(base);
+
+  const body = new THREE.Mesh(
+    new RoundedBoxGeometry(3.55, 1.9, 3.05, 5, 0.18),
+    MATS.terminalBody
+  );
+  body.position.set(0, bodyY, 0);
+  group.add(body);
+
+  const gasket = new THREE.Mesh(
+    new RoundedBoxGeometry(3.67, 0.08, 3.17, 3, 0.03),
+    MATS.gasket
+  );
+  gasket.position.set(0, bodyY + 0.98, 0);
+  group.add(gasket);
+
+  const lid = new THREE.Mesh(
+    new RoundedBoxGeometry(3.82, 0.17, 3.28, 4, 0.075),
+    MATS.terminalBody
+  );
+  lid.position.set(0, bodyY + 1.08, 0);
+  group.add(lid);
+
+  const label = new THREE.Mesh(
+    trackGeometry(new THREE.PlaneGeometry(2.62, 1.05)),
+    MATS.terminalPlate
+  );
+  label.rotation.x = -Math.PI / 2;
+  label.position.set(0, bodyY + 1.172, 0);
+  label.userData.noShadow = true;
+  group.add(label);
+
+  // 盖板四角内六角螺钉
+  [[-1.48, -1.2], [1.48, -1.2], [-1.48, 1.2], [1.48, 1.2]].forEach(([x, z]) => {
+    const head = new THREE.Mesh(
+      trackGeometry(new THREE.CylinderGeometry(0.135, 0.145, 0.1, 18)),
+      MATS.steelDark
+    );
+    head.position.set(x, bodyY + 1.205, z);
+    group.add(head);
+    const slot = new THREE.Mesh(
+      trackGeometry(new THREE.BoxGeometry(0.15, 0.012, 0.035)),
+      MATS.seam
+    );
+    slot.position.set(x, bodyY + 1.258, z);
+    group.add(slot);
+  });
+
+  // 底部安装耳与螺栓
+  [-1, 1].forEach(sign => {
+    [ -1.35, 1.35 ].forEach(z => {
+      const ear = new THREE.Mesh(
+        new RoundedBoxGeometry(0.56, 0.15, 0.34, 2, 0.04),
+        MATS.terminalBody
+      );
+      ear.position.set(sign * 1.74, baseY + 0.12, z);
+      group.add(ear);
+      const bolt = new THREE.Mesh(
+        trackGeometry(new THREE.CylinderGeometry(0.115, 0.125, 0.12, 6)),
+        MATS.steelDark
+      );
+      bolt.position.set(sign * 1.74, baseY + 0.23, z);
+      group.add(bolt);
+    });
+  });
+
+  const glandPlate = new THREE.Mesh(
+    new RoundedBoxGeometry(0.16, 1.12, 2.55, 3, 0.04),
+    MATS.blackPlastic
+  );
+  glandPlate.position.set(1.83, bodyY - 0.04, 0);
+  group.add(glandPlate);
+
+  const glandZ = [-0.92, 0, 0.92];
+  glandZ.forEach((z, index) => {
+    const gland = new THREE.Mesh(
+      trackGeometry(new THREE.CylinderGeometry(0.22, 0.24, 0.4, 20)),
+      MATS.brass
+    );
+    gland.rotation.z = -Math.PI / 2;
+    gland.position.set(2.05, bodyY - 0.1, z);
+    group.add(gland);
+
+    const cap = new THREE.Mesh(
+      trackGeometry(new THREE.CylinderGeometry(0.16, 0.16, 0.1, 20)),
+      MATS.blackPlastic
+    );
+    cap.rotation.z = -Math.PI / 2;
+    cap.position.set(2.29, bodyY - 0.1, z);
+    group.add(cap);
+
+    const points = [
+      V3(2.34, bodyY - 0.1, z),
+      V3(2.72, bodyY - 0.14, z * 1.06),
+      V3(3.52, bodyY - 0.34, z * 1.2),
+      V3(4.62, bodyY - 0.82, z * 1.42),
+      V3(5.52, bodyY - 1.48, z * 1.52),
+    ];
+    const cable = makeCurvedTube(points, 0.095, 8, 36, MATS.phaseCable[index]);
+    group.add(cable);
+
+    const ferrule = new THREE.Mesh(
+      trackGeometry(new THREE.SphereGeometry(0.115, 12, 8)),
+      MATS.brass
+    );
+    ferrule.position.copy(points[points.length - 1]);
+    group.add(ferrule);
+  });
+
+  return group;
+}
+
+function buildAirGap() {
+  const group = new THREE.Group();
+  group.name = 'AirGap';
+
+  const shell = new THREE.Mesh(
+    trackGeometry(new THREE.CylinderGeometry(PARAMS.airGapR, PARAMS.airGapR, PARAMS.coreLength, 112, 1, true)),
+    MATS.airGap
+  );
+  shell.rotation.x = Math.PI / 2;
+  shell.renderOrder = 2;
+  shell.userData.noShadow = true;
+  shell.userData.pickIgnore = true;
+  group.add(shell);
+
+  [-1, 1].forEach(sign => {
+    const edge = new THREE.Mesh(
+      trackGeometry(new THREE.RingGeometry(PARAMS.airGapR - 0.018, PARAMS.airGapR + 0.018, 128)),
+      MATS.airGapEdge
+    );
+    edge.position.z = sign * PARAMS.coreLength / 2;
+    if (sign < 0) edge.rotation.y = Math.PI;
+    edge.userData.noShadow = true;
+    edge.userData.pickIgnore = true;
+    edge.renderOrder = 3;
+    group.add(edge);
+  });
+
+  return group;
+}
+
+/* ============================================================
+   07 · 装配、CSS2D 标签与部件清单
+   ============================================================ */
+function createPartLabel(meta, index) {
+  const element = document.createElement('button');
+  element.type = 'button';
+  element.className = 'part-label';
+  element.style.setProperty('--part-color', meta.color);
+  element.dataset.partId = meta.id;
+  element.setAttribute('aria-label', `选择${meta.name}`);
+  element.innerHTML = `<span class="label-pip"></span><span class="label-text">${meta.name}</span>`;
+  element.addEventListener('click', event => {
+    event.stopPropagation();
+    selectPart(meta.id, { focusPanel: true });
+  });
+
+  const anchor = new THREE.Object3D();
+  anchor.position.copy(meta.labelPos);
+  anchor.name = `${meta.id}-label-anchor`;
+  const object = new CSS2DObject(element);
+  object.center.set(0.5, 0.5);
+  anchor.add(object);
+  return { element, anchor, object };
+}
+
+function createPartRecord(meta, index) {
+  const root = new THREE.Group();
+  root.name = `Part-${meta.id}`;
+  const visual = meta.build();
+  visual.name = `${meta.id}-visual`;
+  root.add(visual);
+
+  root.userData = {
+    isPartRoot: true,
+    partId: meta.id,
+    id: meta.id,
+    name: meta.name,
+    nameEn: meta.nameEn,
+    description: meta.description,
+    material: meta.material,
+    spec: meta.spec,
+    role: meta.role,
+    color: meta.color,
+    index,
+    explodedOffset: meta.explodedOffset.clone(),
+    build: meta.build,
+  };
+
+  const label = createPartLabel(meta, index);
+  root.add(label.anchor);
+
+  root.traverse(child => {
+    if (!child.isMesh) return;
+    const noShadow = Boolean(child.userData.noShadow);
+    child.castShadow = !noShadow;
+    child.receiveShadow = !noShadow;
+  });
+
+  assemblyRoot.add(root);
+  root.position.set(0, 0, 0);
+
+  const record = { meta, root, visual, label, index, hiddenByUser: false };
+  partRecords.push(record);
+  partRecordById.set(meta.id, record);
+  return record;
+}
+
+function buildPartList() {
+  const fragment = document.createDocumentFragment();
+  partRecords.forEach((record, index) => {
+    const { meta } = record;
+    const row = document.createElement('div');
+    row.className = 'part-item';
+    row.dataset.partId = meta.id;
+    row.setAttribute('role', 'listitem');
+    row.tabIndex = 0;
+    row.style.setProperty('--part-color', meta.color);
+    row.title = `${meta.name} / ${meta.nameEn}`;
+    row.innerHTML = `
+      <input class="part-check" type="checkbox" checked aria-label="显示${meta.name}">
+      <span class="part-name">${meta.name}<span class="en">${meta.nameEn}</span></span>
+      <span class="part-mark" aria-hidden="true"></span>
+    `;
+
+    const checkbox = row.querySelector('.part-check');
+    checkbox.addEventListener('click', event => event.stopPropagation());
+    checkbox.addEventListener('change', event => {
+      event.stopPropagation();
+      setPartVisibility(meta.id, checkbox.checked, { fromCheckbox: true });
+    });
+
+    row.addEventListener('click', () => selectPart(meta.id, { focusPanel: false }));
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectPart(meta.id, { focusPanel: false });
+      }
+    });
+
+    record.row = row;
+    record.checkbox = checkbox;
+    fragment.appendChild(row);
+  });
+  dom.partList.appendChild(fragment);
+  dom.partCount.textContent = String(partRecords.length).padStart(2, '0');
+}
+
+function buildPMSM() {
+  dom.loaderStatus.textContent = '生成程序化部件几何体';
+  dom.loaderBar.style.width = '46%';
+  PARTS.forEach(createPartRecord);
+  dom.loaderStatus.textContent = '装配轴承、磁钢与端盖';
+  dom.loaderBar.style.width = '68%';
+  buildPartList();
+  dom.loaderStatus.textContent = '注册 CSS2D 部件标签';
+  dom.loaderBar.style.width = '84%';
+
+  // 初始装配态：所有爆炸位移为零。
+  partRecords.forEach(record => {
+    record.root.position.set(0, 0, 0);
+    record.root.visible = true;
+  });
+
+  setRangeFill(dom.explodeRange);
+  setRangeFill(dom.speedRange);
+  dom.rpmValue.textContent = String(state.speedRpm);
+}
+
+buildPMSM();
+
+/* ============================================================
+   08 · 交互层：拾取、高亮、显隐、透明、剖切与视角
+   ============================================================ */
+const SECTION_PLANE = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.35);
+const raycaster = new THREE.Raycaster();
+const pointerNdc = new THREE.Vector2();
+const overrideMaterialSet = new Set();
+let pickMeshCache = null;
+let pointerDownInfo = null;
+let hoverFrame = 0;
+let hoverClient = null;
+
+/* ---------- 材质状态：原材质 / 玻璃外壳 ---------- */
+function ensureBaseMaterial(mesh) {
+  if (!('baseMaterial' in mesh.userData)) {
+    mesh.userData.baseMaterial = mesh.material;
+    mesh.userData.baseCastShadow = mesh.castShadow;
+    mesh.userData.baseReceiveShadow = mesh.receiveShadow;
+  }
+  return mesh.userData.baseMaterial;
+}
+
+function disposeOverrideMaterial(mesh) {
+  const override = mesh.userData.overrideMaterial;
+  if (!override) return;
+  const list = Array.isArray(override) ? override : [override];
+  list.forEach(material => {
+    overrideMaterialSet.delete(material);
+    material.dispose();
+  });
+  mesh.userData.overrideMaterial = null;
+}
+
+function makeGhostMaterial(base) {
+  const ghost = base.clone();
+  const opacity = Number.isFinite(base.opacity) ? base.opacity : 1;
+  ghost.transparent = true;
+  ghost.opacity = Math.min(0.24, opacity * 0.18 + 0.055);
+  ghost.depthWrite = false;
+  ghost.side = THREE.DoubleSide;
+  overrideMaterialSet.add(ghost);
+  return ghost;
+}
+
+function applyMaterialState(mesh, desiredState) {
+  const base = ensureBaseMaterial(mesh);
+  if (mesh.userData.displayState === desiredState) return;
+  disposeOverrideMaterial(mesh);
+  mesh.userData.displayState = desiredState;
+
+  if (desiredState === 'base') {
+    mesh.material = base;
+    mesh.castShadow = mesh.userData.baseCastShadow;
+    mesh.receiveShadow = mesh.userData.baseReceiveShadow;
+    return;
+  }
+
+  const baseList = Array.isArray(base) ? base : [base];
+  const generated = baseList.map(item => makeGhostMaterial(item));
+  const result = Array.isArray(base) ? generated : generated[0];
+  mesh.material = result;
+  mesh.userData.overrideMaterial = result;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+}
+
+// 透明模式只替换外壳；选中描边由后处理叠加，不改动材质。
+function refreshPartMaterials() {
+  partRecords.forEach(record => {
+    record.root.traverse(mesh => {
+      if (!mesh.isMesh) return;
+      const ghosted = state.transparent && mesh.userData.isShell;
+      applyMaterialState(mesh, ghosted ? 'ghost' : 'base');
+    });
+  });
+}
+
+function syncOutlineSelection() {
+  const record = partRecordById.get(state.selectionId);
+  outlinePass.selectedObjects = record ? [record.root] : [];
+}
+
+/* ---------- 显隐、隔离与标签 ---------- */
+function computePartVisible(record) {
+  if (record.hiddenByUser) return false;
+  if (state.isolate && state.selectionId) {
+    return record.meta.id === state.selectionId;
+  }
+  return true;
+}
+
+function syncLabelVisibility(record) {
+  record.label.object.visible = state.labels && computePartVisible(record);
+}
+
+function updateRecordVisibility(record) {
+  record.root.visible = computePartVisible(record);
+  syncLabelVisibility(record);
+}
+
+function updateAllVisibility() {
+  partRecords.forEach(updateRecordVisibility);
+}
+
+function setPartVisibility(id, visible, options = {}) {
+  const record = partRecordById.get(id);
+  if (!record) return;
+  record.hiddenByUser = !visible;
+  if (visible) state.hidden.delete(id);
+  else state.hidden.add(id);
+
+  if (record.checkbox) record.checkbox.checked = visible;
+  record.row?.classList.toggle('is-hidden', !visible);
+  updateRecordVisibility(record);
+
+  if (!visible && state.selectionId === id) {
+    clearSelection({ silent: true });
+  }
+  if (!options.silent && !options.fromCheckbox) {
+    showToast(visible ? `已显示 ${record.meta.name}` : `已隐藏 ${record.meta.name}`);
+  }
+}
+
+function showAllParts() {
+  state.isolate = false;
+  state.hidden.clear();
+  dom.isolateBtn.classList.remove('is-active');
+  dom.isolateBtn.setAttribute('aria-pressed', 'false');
+  partRecords.forEach(record => {
+    record.hiddenByUser = false;
+    if (record.checkbox) record.checkbox.checked = true;
+    record.row?.classList.remove('is-hidden');
+  });
+  updateAllVisibility();
+  showToast(`已显示全部 ${partRecords.length} 个部件`);
+}
+
+function setIsolate(next) {
+  if (next && !state.selectionId) {
+    showToast('请先选择一个部件，再启用隔离查看');
+    return;
+  }
+  state.isolate = next;
+  dom.isolateBtn.classList.toggle('is-active', next);
+  dom.isolateBtn.setAttribute('aria-pressed', String(next));
+  updateAllVisibility();
+  if (next) {
+    const record = partRecordById.get(state.selectionId);
+    if (record) showToast(`隔离查看：${record.meta.name}`);
+  }
+}
+
+function setLabelsVisible(visible) {
+  state.labels = visible;
+  dom.labelsBtn.classList.toggle('is-active', visible);
+  dom.labelsBtn.setAttribute('aria-pressed', String(visible));
+  partRecords.forEach(syncLabelVisibility);
+}
+
+/* ---------- 选中与信息面板 ---------- */
+function renderPartInfo(record) {
+  const { meta } = record;
+  dom.infoEmpty.hidden = true;
+  dom.partInfo.hidden = false;
+  dom.partInfo.style.setProperty('--part-color', meta.color);
+  dom.infoFileIndex.textContent = `FILE ${String(record.index + 1).padStart(2, '0')} / ${String(partRecords.length).padStart(2, '0')}`;
+  dom.infoNumber.textContent = String(record.index + 1).padStart(2, '0');
+  dom.infoName.textContent = meta.name;
+  dom.infoNameEn.textContent = meta.nameEn;
+  dom.infoMaterial.textContent = meta.material;
+  dom.infoSpec.textContent = meta.spec;
+  dom.infoDescription.textContent = meta.description;
+  dom.infoRole.textContent = meta.role;
+  dom.infoOffset.textContent = describeOffset(meta.explodedOffset);
+}
+
+function showInfoEmpty() {
+  dom.partInfo.hidden = true;
+  dom.infoEmpty.hidden = false;
+  dom.infoFileIndex.textContent = 'NO SELECTION';
+  dom.infoEmpty.style.removeProperty('--part-color');
+  dom.partInfo.scrollTop = 0;
+}
+
+function updateSelectionVisuals() {
+  partRecords.forEach(record => {
+    const selected = record.meta.id === state.selectionId;
+    record.row?.classList.toggle('is-selected', selected);
+    record.label.element.classList.toggle('is-selected', selected);
+  });
+}
+
+/* 小屏（≤520px）下部件清单与档案面板改为可按需展开的浮层 */
+function setMobilePartsOpen(open) {
+  dom.leftRail.classList.toggle('is-parts-open', open);
+  dom.mobilePartsBtn.setAttribute('aria-expanded', String(open));
+}
+
+function setMobileInfoOpen(open) {
+  dom.infoPanel.classList.toggle('is-mobile-open', open);
+  dom.mobileInfoBtn.setAttribute('aria-expanded', String(open));
+}
+
+function selectPart(id, options = {}) {
+  const record = partRecordById.get(id);
+  if (!record) return;
+  if (record.hiddenByUser) {
+    setPartVisibility(id, true, { silent: true });
+  }
+  state.selectionId = id;
+  syncOutlineSelection();
+  updateSelectionVisuals();
+  updateAllVisibility();
+  renderPartInfo(record);
+  setMobilePartsOpen(false);
+  setMobileInfoOpen(true);
+  if (options.focusPanel) dom.partInfo.scrollTop = 0;
+  record.row?.scrollIntoView({ block: 'nearest' });
+}
+
+function clearSelection(options = {}) {
+  if (!state.selectionId) return;
+  state.selectionId = null;
+  syncOutlineSelection();
+  if (state.isolate) {
+    state.isolate = false;
+    dom.isolateBtn.classList.remove('is-active');
+    dom.isolateBtn.setAttribute('aria-pressed', 'false');
+  }
+  updateSelectionVisuals();
+  updateAllVisibility();
+  showInfoEmpty();
+  setMobileInfoOpen(false);
+  if (!options.silent) {
+    // 空点击用于安静退出选中，不额外提示。
+  }
+}
+
+/* ---------- 三维拾取 ---------- */
+function buildPickMeshCache() {
+  pickMeshCache = [];
+  partRecords.forEach(record => {
+    record.root.traverse(object => {
+      if (object.isMesh && !object.userData.pickIgnore) pickMeshCache.push(object);
+    });
+  });
+}
+
+function findPartIdAt(clientX, clientY) {
+  if (!pickMeshCache) buildPickMeshCache();
+  const rect = renderer.domElement.getBoundingClientRect();
+  pointerNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  scene.updateMatrixWorld(true);
+  raycaster.setFromCamera(pointerNdc, camera);
+  const intersections = raycaster.intersectObjects(pickMeshCache, false);
+  let shellFallback = null;
+
+  for (const hit of intersections) {
+    if (state.section && SECTION_PLANE.distanceToPoint(hit.point) < 0) continue;
+    let node = hit.object;
+    let record = null;
+    while (node) {
+      if (node.userData && node.userData.isPartRoot) {
+        record = partRecordById.get(node.userData.partId);
+        break;
+      }
+      node = node.parent;
+    }
+    if (!record || !record.root.visible) continue;
+    // 透明外壳开启时优先选中内部零件；若点击区域仅覆盖外壳则回退到外壳。
+    if (state.transparent && !hit.object.userData.isShell) {
+      return record.meta.id;
+    }
+    if (!shellFallback) shellFallback = record.meta.id;
+  }
+  return shellFallback;
+}
+
+function updateHover(clientX, clientY) {
+  const id = findPartIdAt(clientX, clientY);
+  state.hoveredId = id;
+  renderer.domElement.style.cursor = id ? 'pointer' : 'grab';
+}
+
+/* ---------- 拆解、旋转与外壳模式 ---------- */
+function setExplodeTarget(target, options = {}) {
+  state.explodeTarget = clamp(target, 0, 1);
+  const percent = state.explodeTarget * 100;
+  dom.explodeRange.value = percent.toFixed(1);
+  dom.explodeValue.textContent = String(Math.round(percent));
+  setRangeFill(dom.explodeRange);
+  const open = state.explodeTarget > 0.5;
+  dom.explodeToggle.classList.toggle('is-open', open);
+  dom.explodeToggle.setAttribute('aria-pressed', String(open));
+  dom.explodeBtnText.textContent = open ? '一键装配' : '一键拆解';
+  if (options.toast) {
+    showToast(open ? '拆解进行中 · 拖动滑杆可微调' : '装配进行中 · 各部件回归机位');
+  }
+}
+
+function toggleExplosion() {
+  const next = state.explodeTarget > 0.5 ? 0 : 1;
+  setExplodeTarget(next, { toast: true });
+}
+
+function setSpinning(next) {
+  state.spinning = next;
+  dom.spinBtn.classList.toggle('is-running', next);
+  dom.spinBtn.classList.toggle('is-paused', !next);
+  dom.spinBtn.setAttribute('aria-pressed', String(next));
+  dom.spinBtnText.textContent = next ? '暂停' : '继续';
+  dom.rpmState.classList.toggle('is-paused', !next);
+  dom.rpmState.innerHTML = next ? '<i></i>RUNNING' : '<i></i>PAUSED';
+  if (!next) {
+    windingFlows.forEach(flow => {
+      flow.material.emissiveIntensity = flow.baseIntensity ?? 0.04;
+    });
+  }
+}
+
+function setSpeed(rpm) {
+  state.speedRpm = clamp(Math.round(rpm), 6, 180);
+  dom.speedRange.value = String(state.speedRpm);
+  dom.rpmValue.textContent = String(state.speedRpm);
+  setRangeFill(dom.speedRange);
+}
+
+function setTransparent(next, options = {}) {
+  state.transparent = next;
+  dom.transparentBtn.classList.toggle('is-active', next);
+  dom.transparentBtn.setAttribute('aria-pressed', String(next));
+  refreshPartMaterials();
+  if (!options.silent) {
+    showToast(next ? '透明外壳已开启 · 可透视定子与绕组' : '外壳已恢复实体材质');
+  }
+}
+
+function setSection(next, options = {}) {
+  state.section = next;
+  renderer.clippingPlanes = next ? [SECTION_PLANE] : [];
+  dom.sectionBtn.classList.toggle('is-active', next);
+  dom.sectionBtn.setAttribute('aria-pressed', String(next));
+  if (!options.silent) {
+    showToast(next ? '轴向半剖已开启 · 切除上半部观察内部' : '轴向剖切已关闭');
+  }
+}
+
+/* ---------- 相机预设与缓动过渡 ---------- */
+const VIEW_PRESETS = {
+  iso: { position: DEFAULT_CAMERA_POS.clone(), target: DEFAULT_CAMERA_TARGET.clone() },
+  front: { position: V3(0, 2.2, 58), target: V3(0, 0, 0) },
+  section: { position: V3(21, 49, 33), target: V3(0, 0, 0) },
+  reset: { position: DEFAULT_CAMERA_POS.clone(), target: DEFAULT_CAMERA_TARGET.clone() },
+};
+
+function responsiveCameraPosition(position, target) {
+  const width = window.innerWidth;
+  const aspect = width / Math.max(1, window.innerHeight);
+  let factor = 1;
+  if (aspect < 0.72) factor = 1.62;
+  else if (aspect < 1) factor = 1.34;
+  else if (aspect < 1.36) factor = 1.12;
+  // 窄屏上左右 HUD 占比更高，额外后退以免模型被面板遮住。
+  if (width < 1180) factor *= 1.06;
+  if (width < 900) factor *= 1.12;
+  // 手机端浮层可收起，无需为面板预留过多画布空间。
+  if (width <= 520) factor = Math.min(factor, 1.55);
+  return target.clone().add(position.clone().sub(target).multiplyScalar(factor));
+}
+
+function setActiveViewButton(view) {
+  document.querySelectorAll('.view-btn').forEach(button => {
+    button.classList.toggle('is-active', button.dataset.view === view);
+  });
+}
+
+function startCameraTween(position, target) {
+  state.cameraTween = {
+    fromPosition: camera.position.clone(),
+    fromTarget: controls.target.clone(),
+    toPosition: position.clone(),
+    toTarget: target.clone(),
+    startedAt: performance.now(),
+    duration: 1050,
+  };
+}
+
+function applyViewPreset(view) {
+  const preset = VIEW_PRESETS[view] || VIEW_PRESETS.iso;
+  if (view === 'section') setSection(true, { silent: true });
+  const toTarget = preset.target.clone();
+  const toPosition = responsiveCameraPosition(preset.position, toTarget);
+  startCameraTween(toPosition, toTarget);
+  state.view = view === 'reset' ? 'iso' : view;
+  state.viewLocked = true;
+  setActiveViewButton(state.view);
+  if (view === 'reset') showToast('视角已复位');
+}
+
+controls.addEventListener('start', () => {
+  if (state.cameraTween) state.cameraTween = null;
+  state.viewLocked = false;
+});
+
+/* ---------- 键盘与指针事件 ---------- */
+renderer.domElement.style.cursor = 'grab';
+
+renderer.domElement.addEventListener('pointerdown', event => {
+  if (event.button !== 0) return;
+  pointerDownInfo = {
+    x: event.clientX,
+    y: event.clientY,
+    time: performance.now(),
+    pointerId: event.pointerId,
+  };
+});
+
+renderer.domElement.addEventListener('pointerup', event => {
+  const info = pointerDownInfo;
+  pointerDownInfo = null;
+  if (!info || event.pointerId !== info.pointerId || event.button !== 0) return;
+  const moved = Math.hypot(event.clientX - info.x, event.clientY - info.y);
+  if (moved > 6 || performance.now() - info.time > 900) return;
+  const pickedId = findPartIdAt(event.clientX, event.clientY);
+  if (pickedId) selectPart(pickedId);
+  else clearSelection();
+});
+
+renderer.domElement.addEventListener('pointercancel', () => {
+  pointerDownInfo = null;
+});
+
+renderer.domElement.addEventListener('pointermove', event => {
+  if (event.pointerType === 'touch' || event.buttons !== 0) return;
+  hoverClient = { x: event.clientX, y: event.clientY };
+  if (hoverFrame) return;
+  hoverFrame = requestAnimationFrame(() => {
+    hoverFrame = 0;
+    if (hoverClient) updateHover(hoverClient.x, hoverClient.y);
+  });
+});
+
+renderer.domElement.addEventListener('pointerleave', () => {
+  hoverClient = null;
+  state.hoveredId = null;
+  renderer.domElement.style.cursor = 'grab';
+});
+
+window.addEventListener('keydown', event => {
+  if (event.defaultPrevented || event.repeat) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const target = event.target;
+  const isTextInput = target instanceof HTMLElement && (
+    target.tagName === 'INPUT'
+    || target.tagName === 'TEXTAREA'
+    || target.isContentEditable
+  );
+  if (isTextInput) {
+    if (event.code === 'Escape') clearSelection();
+    return;
+  }
+  if (target instanceof HTMLButtonElement && (event.code === 'Space' || event.code === 'Enter')) return;
+
+  switch (event.code) {
+    case 'KeyR':
+      applyViewPreset('reset');
+      break;
+    case 'KeyE':
+      toggleExplosion();
+      break;
+    case 'Space':
+      event.preventDefault();
+      setSpinning(!state.spinning);
+      break;
+    case 'KeyL':
+      setLabelsVisible(!state.labels);
+      break;
+    case 'KeyT':
+      setTransparent(!state.transparent);
+      break;
+    case 'KeyC':
+      setSection(!state.section);
+      break;
+    case 'Escape':
+      setMobilePartsOpen(false);
+      setMobileInfoOpen(false);
+      clearSelection();
+      break;
+    default:
+      break;
+  }
+});
+
+/* ---------- UI 事件绑定 ---------- */
+dom.explodeRange.addEventListener('input', () => {
+  setExplodeTarget(Number(dom.explodeRange.value) / 100);
+});
+dom.explodeToggle.addEventListener('click', toggleExplosion);
+dom.speedRange.addEventListener('input', () => setSpeed(Number(dom.speedRange.value)));
+dom.spinBtn.addEventListener('click', () => setSpinning(!state.spinning));
+dom.transparentBtn.addEventListener('click', () => setTransparent(!state.transparent));
+dom.sectionBtn.addEventListener('click', () => setSection(!state.section));
+dom.labelsBtn.addEventListener('click', () => setLabelsVisible(!state.labels));
+dom.isolateBtn.addEventListener('click', () => setIsolate(!state.isolate));
+dom.showAllBtn.addEventListener('click', showAllParts);
+dom.helpBtn.addEventListener('click', () => {
+  state.hintsVisible = !state.hintsVisible;
+  dom.hints.classList.toggle('is-hidden', !state.hintsVisible);
+  dom.helpBtn.classList.toggle('is-active', state.hintsVisible);
+});
+dom.mobilePartsBtn.addEventListener('click', () => {
+  const open = !dom.leftRail.classList.contains('is-parts-open');
+  setMobilePartsOpen(open);
+  if (open) setMobileInfoOpen(false);
+});
+dom.mobileInfoBtn.addEventListener('click', () => {
+  const open = !dom.infoPanel.classList.contains('is-mobile-open');
+  setMobileInfoOpen(open);
+  if (open) setMobilePartsOpen(false);
+});
+dom.infoCloseBtn.addEventListener('click', () => setMobileInfoOpen(false));
+document.querySelectorAll('.view-btn').forEach(button => {
+  button.addEventListener('click', () => applyViewPreset(button.dataset.view));
+});
+
+window.addEventListener('resize', () => {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  camera.aspect = width / Math.max(1, height);
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setSize(width, height);
+  composer.setPixelRatio(renderer.getPixelRatio());
+  composer.setSize(width, height);
+  labelRenderer.setSize(width, height);
+  // 未手动转动时按当前预设重新适配窄屏距离；用户接管视角后不再干预。
+  if (state.viewLocked) {
+    const preset = VIEW_PRESETS[state.view] || VIEW_PRESETS.iso;
+    const target = preset.target.clone();
+    const position = responsiveCameraPosition(preset.position, target);
+    if (state.cameraTween) {
+      state.cameraTween.toTarget.copy(target);
+      state.cameraTween.toPosition.copy(position);
+    } else {
+      camera.position.copy(position);
+      controls.target.copy(target);
+      controls.update();
+    }
+  }
+});
+
+/* ---------- 初始 UI 同步 ---------- */
+windingFlows.forEach(flow => {
+  flow.baseIntensity = flow.material.emissiveIntensity;
+});
+setExplodeTarget(0);
+setSpeed(state.speedRpm);
+setSpinning(true);
+setLabelsVisible(true);
+setSection(false, { silent: true });
+refreshPartMaterials();
+updateAllVisibility();
+setActiveViewButton('iso');
+showInfoEmpty();
+
+/* ============================================================
+   09 · 动画循环、加载收尾与资源释放
+   ============================================================ */
+const clock = new THREE.Clock();
+let loaderFinished = false;
+let animationFrameId = 0;
+
+function applyExplosionPositions() {
+  partRecords.forEach(record => {
+    record.root.position.copy(record.meta.explodedOffset).multiplyScalar(state.explodeCurrent);
+  });
+}
+
+function updateExplosion(dt) {
+  const difference = state.explodeTarget - state.explodeCurrent;
+  if (Math.abs(difference) < 0.00012) {
+    if (state.explodeCurrent !== state.explodeTarget) {
+      state.explodeCurrent = state.explodeTarget;
+      applyExplosionPositions();
+    }
+    return;
+  }
+  state.explodeCurrent = expDamp(state.explodeCurrent, state.explodeTarget, 7.2, dt);
+  applyExplosionPositions();
+}
+
+const RAD_PER_MINUTE = (Math.PI * 2) / 60;
+
+// 爆炸展开时轻微扩大视场角，让两端部件留在画面内，同时保持装配态紧凑构图。
+function updateExplosionFraming(dt) {
+  const targetFov = lerp(CAMERA_BASE_FOV, CAMERA_EXPLODE_FOV, state.explodeCurrent);
+  if (Math.abs(camera.fov - targetFov) < 0.005) return;
+  camera.fov = expDamp(camera.fov, targetFov, 6.5, dt);
+  camera.updateProjectionMatrix();
+}
+
+function updateRotation(dt) {
+  if (!state.spinning) return;
+  state.spinAngle = (state.spinAngle + state.speedRpm * RAD_PER_MINUTE * dt) % (Math.PI * 2);
+  rotatingObjects.forEach(object => {
+    object.rotation.z = state.spinAngle;
+  });
+}
+
+function updateWindingFlow(dt) {
+  if (!state.spinning) return;
+  state.flowTime += dt * (4.5 + state.speedRpm * 0.12);
+  windingFlows.forEach(flow => {
+    const wave = 0.5 + 0.5 * Math.sin(state.flowTime - flow.offset * Math.PI * 2);
+    const intensity = (flow.baseIntensity ?? 0.035) + Math.pow(wave, 2.1) * 0.82 * flow.strength;
+    flow.material.emissiveIntensity = intensity;
+  });
+}
+
+function updateCameraTween(now) {
+  const tween = state.cameraTween;
+  if (!tween) return;
+  const t = clamp((now - tween.startedAt) / tween.duration, 0, 1);
+  const eased = easeInOutCubic(t);
+  camera.position.lerpVectors(tween.fromPosition, tween.toPosition, eased);
+  controls.target.lerpVectors(tween.fromTarget, tween.toTarget, eased);
+  camera.lookAt(controls.target);
+  if (t >= 1) state.cameraTween = null;
+}
+
+function finishLoading() {
+  dom.loaderBar.style.width = '100%';
+  dom.loaderStatus.textContent = '装配完成 · 交互就绪';
+  window.__appReady = true;
+  window.setTimeout(() => dom.loader.classList.add('is-hidden'), 260);
+}
+
+function animate() {
+  animationFrameId = requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  updateCameraTween(performance.now());
+  updateExplosion(dt);
+  updateExplosionFraming(dt);
+  updateRotation(dt);
+  updateWindingFlow(dt);
+  controls.update();
+
+  composer.render();
+  labelRenderer.render(scene, camera);
+
+  if (!loaderFinished) {
+    loaderFinished = true;
+    finishLoading();
+  }
+}
+
+function disposeRenderAssets() {
+  cancelAnimationFrame(animationFrameId);
+  overrideMaterialSet.forEach(material => material.dispose());
+  overrideMaterialSet.clear();
+  materialDisposalSet.forEach(material => material.dispose());
+  textureDisposalSet.forEach(texture => texture.dispose());
+  const geometrySet = new Set();
+  scene.traverse(object => {
+    if (!object.isMesh) return;
+    if (object.geometry) geometrySet.add(object.geometry);
+    const list = Array.isArray(object.material) ? object.material : [object.material];
+    list.forEach(material => material && material.dispose());
+  });
+  geometrySet.forEach(geometry => geometry.dispose());
+  environmentRT.dispose();
+  outlinePass.dispose();
+  outputPass.dispose();
+  composer.dispose();
+  renderer.dispose();
+}
+
+window.addEventListener('pagehide', event => {
+  if (!event.persisted) disposeRenderAssets();
+});
+
+camera.position.copy(responsiveCameraPosition(DEFAULT_CAMERA_POS, DEFAULT_CAMERA_TARGET));
+controls.target.copy(DEFAULT_CAMERA_TARGET);
+controls.update();
+animate();
+</script>
+</body>
+</html>
